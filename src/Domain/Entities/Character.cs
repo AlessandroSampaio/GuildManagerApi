@@ -13,6 +13,7 @@ public class Character
 
 
     // Navigation
+    public virtual Class Class { get; set; } = null!;
     public virtual Guild? Guild { get; set; }
     public ICollection<PerformanceEntry>? PerformanceEntries { get; set; } = [];
 }
