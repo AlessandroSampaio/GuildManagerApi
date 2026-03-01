@@ -2,4 +2,4 @@
 */**/bin/
 */**/obj/
 
-*/**/*.development.json
+*/**/appsettings.json

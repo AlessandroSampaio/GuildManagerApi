@@ -26,6 +26,7 @@ builder.Services.Configure<JwtOptions>(
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(
     builder.Configuration.GetConnectionString("DefaultConnection"),
     npsql => npsql.EnableRetryOnFailure(3)
+        .MigrationsAssembly("GuildManagerApi.Api")
 ));
 
 // ── JWT Authentication
