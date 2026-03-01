@@ -152,7 +152,11 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "WarcraftLogs API v1"));
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/api/v1/docs", "GuildManager API v1");
+        c.RoutePrefix = string.Empty;
+    });
 }
 
 app.UseHttpsRedirection();
