@@ -15,6 +15,8 @@ public class AppUser
     public bool IsActive { get; set; } = true;
     // Refresh tokens
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+    // WarcraftLogs OAuth token (Authorization Code Flow)
+    public WclUserToken? WclToken { get; set; }
 }
 
 public class RefreshToken
@@ -25,6 +27,20 @@ public class RefreshToken
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsRevoked { get; set; }
+
+    public AppUser User { get; set; } = null!;
+}
+
+public class WclUserToken
+{
+    public int Id { get; set; }
+    public Guid UserId { get; set; }
+    public string AccessToken { get; set; } = string.Empty;
+    public string WclRefreshToken { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastRefreshedAt { get; set; }
+    public bool IsExpired => DateTime.UtcNow >= ExpiresAt.AddMinutes(-2);
 
     public AppUser User { get; set; } = null!;
 }

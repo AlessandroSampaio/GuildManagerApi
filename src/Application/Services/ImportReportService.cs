@@ -8,7 +8,7 @@ namespace GuildManagerApi.Application.Services;
 
 public interface IImportReportService
 {
-    Task<ImportResultDto> ImportAsync(string reportCode, CancellationToken ct = default);
+    Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, CancellationToken ct = default);
 }
 
 public partial class ImportReportService(
@@ -25,12 +25,12 @@ public partial class ImportReportService(
     private readonly IGuildRepository _guilds = guilds;
     private readonly IPerformanceRepository _performance = performance;
 
-    public async Task<ImportResultDto> ImportAsync(string reportCode, CancellationToken ct = default)
+    public async Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, CancellationToken ct = default)
     {
         LogStartingImport(reportCode);
 
         // Fetch report data from WCL
-        var wclReport = await _wclClient.GetReportAsync(reportCode, ct);
+        var wclReport = await _wclClient.GetReportAsync(reportCode, userId, ct);
 
         // Upsert guild
         int? guildId = null;
@@ -103,7 +103,7 @@ public partial class ImportReportService(
 
         if (killFightIds.Count > 0)
         {
-            rankingsMap = await _wclClient.GetRankingsAsync(reportCode, killFightIds, "dps", ct);
+            rankingsMap = await _wclClient.GetRankingsAsync(reportCode, killFightIds, userId, "dps", ct);
         }
 
         // Build and persist performance entries

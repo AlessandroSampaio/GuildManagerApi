@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PerformanceEntry> PerformanceEntries => Set<PerformanceEntry>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -248,6 +249,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(t => t.User)
              .WithMany(u => u.RefreshTokens)
              .HasForeignKey(t => t.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // WclUserToken
+        builder.Entity<WclUserToken>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.AccessToken).IsRequired();
+            e.Property(t => t.WclRefreshToken);
+            e.HasIndex(t => t.UserId).IsUnique(); // one token per user
+
+            e.HasOne(t => t.User)
+             .WithOne(u => u.WclToken)
+             .HasForeignKey<WclUserToken>(t => t.UserId)
              .OnDelete(DeleteBehavior.Cascade);
         });
 

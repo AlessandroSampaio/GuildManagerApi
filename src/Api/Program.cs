@@ -76,6 +76,7 @@ builder.Services.AddAuthorizationBuilder()
 
 
 // ── HTTP Clients
+builder.Services.AddScoped<IWclTokenService, WclTokenService>();
 builder.Services.AddHttpClient<IWclTokenService, WclTokenService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
@@ -95,6 +96,9 @@ builder.Services.AddScoped<IPerformanceRepository, PerformanceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // ── API
+// In-memory cache for OAuth state nonces (anti-CSRF)
+builder.Services.AddMemoryCache();
+
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>
     {

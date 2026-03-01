@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
@@ -34,7 +35,8 @@ public class ReportsController(
         if (string.IsNullOrWhiteSpace(reportCode) || reportCode.Length > 16)
             return BadRequest("Invalid report code");
 
-        var result = await _importService.ImportAsync(reportCode.Trim(), ct);
+        var userId = GetUserId();
+        var result = await _importService.ImportAsync(reportCode.Trim(), userId, ct);
         return CreatedAtAction(nameof(GetReport), new { reportCode }, result);
     }
 
@@ -124,5 +126,12 @@ public class ReportsController(
         }
 
         return Ok(result);
+    }
+
+    private Guid? GetUserId()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
+               ?? User.FindFirstValue("sub");
+        return sub is null ? null : Guid.Parse(sub);
     }
 }

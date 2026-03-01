@@ -39,8 +39,8 @@ public record WclPlayerRanking(
 
 public interface IWclGraphQLClient
 {
-    Task<WclReport> GetReportAsync(string reportCode, CancellationToken cancellationToken);
-    Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, string metric, CancellationToken ct);
+    Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default);
+    Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, string metric = "dps", CancellationToken ct = default);
 }
 
 public partial class WclGraphQLClient(
@@ -53,7 +53,7 @@ public partial class WclGraphQLClient(
     private readonly IWclTokenService _tokenService = tokenService;
     private readonly WclAuthOptions _opts = opts.Value;
 
-    public async Task<WclReport> GetReportAsync(string reportCode, CancellationToken ct)
+    public async Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default)
     {
         const string query = """
                     query GetReport($code: String!) {
@@ -78,11 +78,11 @@ public partial class WclGraphQLClient(
                     """;
 
 
-        var response = await ExecuteQueryAsync<WclReportResponse>(query, new { code = reportCode }, ct);
+        var response = await ExecuteQueryAsync<WclReportResponse>(query, new { code = reportCode }, userId, ct);
         return response.ReportData.Report;
     }
 
-    public async Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, string metric = "dps", CancellationToken ct = default)
+    public async Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, string metric = "dps", CancellationToken ct = default)
     {
         var fightIdsArray = fightIds.ToArray();
         LogFetchRankings(reportCode, fightIdsArray.Length, metric);
@@ -114,7 +114,7 @@ public partial class WclGraphQLClient(
                     code = reportCode,
                     fightIds = new[] { fightId },
                     metric
-                }, ct);
+                }, userId, ct);
 
                 var data = response
                     .GetProperty("reportData")
@@ -133,18 +133,34 @@ public partial class WclGraphQLClient(
                 LogFetchRankingsFail(reportCode, fightId, ex.Message);
                 results[fightId] = [];
             }
+        }
+        return results;
+    }
 
+    /// <summary>
+    /// Resolve which endpoint and token to use
+    ///  - userId informed + authorized user     → private route /api/v2/user + user token
+    ///  - else                                  → public  route /api/v2/client + app token
+    /// </summary>
+    private async Task<(string endpoint, string token)> ResolveEndpointAndTokenAsync(
+        Guid? userId, CancellationToken ct)
+    {
+        if (userId.HasValue && await _tokenService.IsUserAuthorizedAsync(userId.Value, ct))
+        {
+            var userToken = await _tokenService.GetUserTokenAsync(userId.Value, ct);
+            return (_opts.PrivateGraphQlEndpoint, userToken);
         }
 
-        throw new NotImplementedException();
+        var appToken = await _tokenService.GetAppTokenAsync(ct);
+        return (_opts.PublicGraphQlEndpoint, appToken);
     }
 
 
-    private async Task<T> ExecuteQueryAsync<T>(object query, object variables, CancellationToken ct)
+    private async Task<T> ExecuteQueryAsync<T>(object query, object variables, Guid? userId = null, CancellationToken ct = default)
     {
-        var token = await _tokenService.GetAccessTokenAsync(ct);
+        var (endpoint, token) = await ResolveEndpointAndTokenAsync(userId, ct);
         var payload = JsonSerializer.Serialize(new { query, variables });
-        var request = new HttpRequestMessage(HttpMethod.Post, _opts.GraphQlEndpoint)
+        var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json"),
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) }
