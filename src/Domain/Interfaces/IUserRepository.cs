@@ -14,5 +14,5 @@ public interface IUserRepository
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken ct = default);
     Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken ct = default);
     Task RevokeRefreshTokenAsync(string token, CancellationToken ct = default);
-    Task RevokeAllUserTokensAsync(int userId, CancellationToken ct = default);
+    Task RevokeAllUserTokensAsync(Guid userId, CancellationToken ct = default);
 }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GuildManagerApi.Domain.Enums;
 
 namespace GuildManagerApi.Application.DTOs;
 
@@ -34,10 +35,10 @@ public record AuthResponse(
 );
 
 public record UserInfoDto(
-    int Id,
+    Guid Id,
     string Username,
     string Email,
-    string Role,
+    AppUserRole Role,
     DateTime CreatedAt,
     DateTime? LastLoginAt
 );

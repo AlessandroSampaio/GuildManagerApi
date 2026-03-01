@@ -38,7 +38,7 @@ public class UserRepository(AppDbContext context) : IUserRepository
     public Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default)
         => _context.RefreshTokens.FirstOrDefaultAsync(r => r.Token.Equals(token), cancellationToken);
 
-    public Task RevokeAllUserTokensAsync(int userId, CancellationToken cancellationToken = default)
+    public Task RevokeAllUserTokensAsync(Guid userId, CancellationToken cancellationToken = default)
         => _context.RefreshTokens
             .Where(r => r.UserId.Equals(userId) && !r.IsRevoked)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRevoked, true), cancellationToken);
