@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Api/">
-    <Project Path="src/Api/GuildManagerApi.Api.csproj" />
+    <Project Path="src/Api/GuildManagerApi.Api.csproj" DefaultStartup="true" />
   </Folder>
   <Folder Name="/src/Application/">
     <Project Path="src/Application/GuildManagerApi.Application.csproj" />
