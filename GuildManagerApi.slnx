@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/src/" />
+  <Folder Name="/src/Api/">
+    <Project Path="src/Api/GuildManagerApi.Api.csproj" />
+  </Folder>
   <Folder Name="/src/Application/">
     <Project Path="src/Application/GuildManagerApi.Application.csproj" />
   </Folder>
