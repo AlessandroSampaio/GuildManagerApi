@@ -1,4 +1,5 @@
 using GuildManagerApi.Domain.Entities;
+using GuildManagerApi.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace GuildManagerApi.Infrastructure.Data;
@@ -26,7 +27,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         builder.Entity<Class>()
             .HasData(
-                new Class() { Id = 0, Name = "Unknown", SlugName = "unknown" },
                 new Class()
                 {
                     Id = 1,
@@ -110,7 +110,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // Specializations
         builder.Entity<Specialization>(e =>
         {
-            e.HasKey(c => c.Id);
+            e.HasKey(c => new { c.Id, c.ClassId });
             e.Property(c => c.Name).HasMaxLength(20).IsRequired();
             e.Property(c => c.SlugName).HasMaxLength(20);
             e.HasIndex(c => c.ClassId);
@@ -122,7 +122,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         });
 
         builder.Entity<Specialization>().HasData(
-            new Specialization() { Id = 0, ClassId = 0, Name = "Unknown", SlugName = "unknown" },
             new Specialization() { Id = 1, ClassId = 1, Name = "Blood", SlugName = "Blood" },
             new Specialization() { Id = 2, ClassId = 1, Name = "Frost", SlugName = "Frost" },
             new Specialization() { Id = 3, ClassId = 1, Name = "Unholy", SlugName = "Unholy" },
@@ -233,7 +232,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Username).HasMaxLength(32).IsRequired();
             e.Property(u => u.Email).HasMaxLength(128).IsRequired();
             e.Property(u => u.PasswordHash).IsRequired();
-            e.Property(u => u.Role).HasMaxLength(16).HasDefaultValue("User");
+            e.Property(u => u.Role);
             e.HasIndex(u => u.Username).IsUnique();
             e.HasIndex(u => u.Email).IsUnique();
         });

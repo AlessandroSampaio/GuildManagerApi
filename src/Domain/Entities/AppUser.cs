@@ -1,3 +1,4 @@
+
 using GuildManagerApi.Domain.Enums;
 
 namespace GuildManagerApi.Domain.Entities;

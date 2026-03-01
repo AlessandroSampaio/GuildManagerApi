@@ -1,3 +1,5 @@
 # Build files
 */**/bin/
 */**/obj/
+
+*/**/*.development.json
