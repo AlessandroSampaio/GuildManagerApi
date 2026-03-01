@@ -13,7 +13,7 @@ public record WclReportResponse(WclReportData ReportData);
 public record WclReportData(WclReport Report);
 public record WclReport(string Title, long StartTime, long EndTime, WclGuild? Guild, List<WclFight> Fights, WclMasterData MasterData);
 public record WclGuild(string Name, WclServer Server);
-public record WclServer(string Name);
+public record WclServer(string Name, WclRegion Region);
 public record WclRegion(string Name);
 public record WclFight(
     int Id,
