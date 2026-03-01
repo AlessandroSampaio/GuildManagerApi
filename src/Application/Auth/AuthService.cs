@@ -45,7 +45,7 @@ public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOpt
             throw new UnauthorizedAccessException("Account disabled");
 
         if (BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            throw new UnauthorizedAccessException("Invai usernme or password.");
+            throw new UnauthorizedAccessException("Invalid username or password.");
 
         user.LastLoginAt = DateTime.UtcNow;
         await _users.UpdateAsync(user, ct);
