@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        <RootNamespace>GuildManagerApi.Application</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Domain\GuildManagerApi.Domain.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- JWT token generation and validation -->
+        <PackageReference
+            Include="Microsoft.AspNetCore.Authentication.JwtBearer"
+            Version="10.0.3"
+        />
+        <PackageReference
+            Include="System.IdentityModel.Tokens.Jwt"
+            Version="8.16.0"
+        />
+
+        <!-- Password hashing -->
+        <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+
+
+         <!-- HTTP client + JSON for GraphQL calls -->
+        <PackageReference
+            Include="Microsoft.Extensions.Http"
+            Version="10.0.3"
+        />
+        <PackageReference
+            Include="Microsoft.Extensions.Logging.Abstractions"
+            Version="10.0.3"
+        />
+        <PackageReference
+            Include="Microsoft.Extensions.Options"
+            Version="10.0.3"
+        />
+    </ItemGroup>
+
+
+</Project>
