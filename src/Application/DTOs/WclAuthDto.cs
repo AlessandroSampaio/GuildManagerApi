@@ -18,3 +18,16 @@ public record WclStatusDto(
     bool IsAuthorized,
     string Message
 );
+
+public record WclCredentialRequest(
+    string ClientId,
+    string ClientSecret,
+    string? Label = null
+);
+
+public record WclCredentialStatusResponse(
+    bool Configured,
+    string? Label,
+    DateTime? UpdatedAt,
+    string Message
+);
