@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
+    public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -286,5 +287,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .HasForeignKey(p => p.CharacterId)
              .OnDelete(DeleteBehavior.Cascade);
         });
+
+        builder.Entity<WclCredential>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).ValueGeneratedNever();
+                e.Property(c => c.ClientIdEncrypted).IsRequired();
+                e.Property(c => c.ClientSecretEncrypted).IsRequired();
+                e.Property(c => c.Label).HasMaxLength(128);
+                e.ToTable("wcl_credentials");
+            });
     }
 }
