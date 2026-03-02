@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
+var MyAllowSpecificOrigins = "AllowAll";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Configuration
@@ -139,8 +141,21 @@ builder.Services.AddSwaggerGen(c =>
     if (File.Exists(xmlPath)) c.IncludeXmlComments(xmlPath);
 });
 
+// ── Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // ── Build
 var app = builder.Build();
+
+app.UseCors(MyAllowSpecificOrigins);
 
 // Auto-run migrations on startup
 using var scope = app.Services.CreateScope();
