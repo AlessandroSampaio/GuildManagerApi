@@ -6,6 +6,7 @@ using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Auth;
 using GuildManagerApi.Infrastructure.Data;
+using GuildManagerApi.Infrastructure.Encryption;
 using GuildManagerApi.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -16,22 +17,25 @@ var MyAllowSpecificOrigins = "AllowAll";
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Configuration
+// Configuration
 builder.Services.Configure<WclAuthOptions>(
     builder.Configuration.GetSection(WclAuthOptions.Section));
 
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.Section));
 
+builder.Services.Configure<EncryptionOptions>(
+    builder.Configuration.GetSection(EncryptionOptions.Section));
 
-// ── Database (PostgreSQL)
+
+// Context
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(
     builder.Configuration.GetConnectionString("DefaultConnection"),
     npsql => npsql.EnableRetryOnFailure(3)
         .MigrationsAssembly("GuildManagerApi.Api")
 ));
 
-// ── JWT Authentication
+// JWT Authentication
 var jwtSection = builder.Configuration.GetSection(JwtOptions.Section);
 var secretKey = jwtSection["SecretKey"]
     ?? throw new InvalidOperationException("JWT SecretKey is not configured");
@@ -77,7 +81,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
 
 
-// ── HTTP Clients
+// HTTP Clients
 builder.Services.AddScoped<IWclTokenService, WclTokenService>();
 builder.Services.AddHttpClient<IWclTokenService, WclTokenService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
@@ -85,19 +89,21 @@ builder.Services.AddHttpClient<IWclTokenService, WclTokenService>()
 builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
-// ── Application Services
+// Application Services
 builder.Services.AddScoped<IImportReportService, ImportReportService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
+builder.Services.AddSingleton<IFieldEncryptionService, AesGcmFieldEncryptionService>();
 
-// ── Repositories
+// Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();
 builder.Services.AddScoped<ICharacterRepository, CharacterRepository>();
 builder.Services.AddScoped<IGuildRepository, GuildRepository>();
 builder.Services.AddScoped<IPerformanceRepository, PerformanceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 
-// ── API
+// API
 // In-memory cache for OAuth state nonces (anti-CSRF)
 builder.Services.AddMemoryCache();
 
@@ -141,7 +147,7 @@ builder.Services.AddSwaggerGen(c =>
     if (File.Exists(xmlPath)) c.IncludeXmlComments(xmlPath);
 });
 
-// ── Configure CORS
+// Configure CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -152,7 +158,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ── Build
+// Build
 var app = builder.Build();
 
 app.UseCors(MyAllowSpecificOrigins);

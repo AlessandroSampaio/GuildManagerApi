@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GuildManagerApi.Domain.Entities;
+using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,7 @@ public interface IWclTokenService
     Task<string> GetAppTokenAsync(CancellationToken ct = default);
 
     /// <summary>Gera a URL de autorização do WCL para redirecionar o usuário.</summary>
-    (string AuthorizeUrl, string State) BuildAuthorizeUrl();
+    Task<(string AuthorizeUrl, string State)> BuildAuthorizeUrl(CancellationToken ct = default);
 
     /// <summary>Troca o authorization code por access + refresh token do usuário.</summary>
     Task<WclUserToken> ExchangeCodeAsync(Guid userId, string code, CancellationToken ct = default);
@@ -47,12 +48,13 @@ public interface IWclTokenService
     Task RevokeUserTokenAsync(Guid userId, CancellationToken ct = default);
 }
 
-public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOptions> opts, AppDbContext context, ILogger<WclTokenService> logger) : IWclTokenService
+public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOptions> opts, IWclCredentialService credentials, AppDbContext context, ILogger<WclTokenService> logger) : IWclTokenService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly WclAuthOptions _opts = opts.Value;
     private readonly ILogger<WclTokenService> _logger = logger;
     private readonly AppDbContext _db = context;
+    private readonly IWclCredentialService _credentials = credentials;
 
 
     // Cache do token de aplicação (compartilhado, sem vínculo de usuário)
@@ -72,8 +74,7 @@ public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOpti
         {
             _logger.LogInformation("Refreshing WarcraftLogs OAuth token...");
 
-            var credentials = Convert.ToBase64String(
-                           Encoding.UTF8.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}"));
+            var credentials = await BuildBasicCredentialsAsync(ct);
 
             var request = new HttpRequestMessage(HttpMethod.Post, _opts.TokenEndpoint)
             {
@@ -106,15 +107,17 @@ public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOpti
     }
 
     // Private Route - Authorization Code Flow
-    public (string AuthorizeUrl, string State) BuildAuthorizeUrl()
+    public async Task<(string AuthorizeUrl, string State)> BuildAuthorizeUrl(CancellationToken ct = default)
     {
+        var clientId = await _credentials.GetClientIdAsync(ct);
+
         // Used to prevent CSRF
         var state = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24))
             .Replace("+", "-").Replace("/", "_").Replace("=", "");
 
         var query = new Dictionary<string, string>
         {
-            ["client_id"] = _opts.ClientId,
+            ["client_id"] = clientId,
             ["redirect_uri"] = _opts.RedirectUri,
             ["response_type"] = "code",
             ["state"] = state,
@@ -128,9 +131,7 @@ public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOpti
 
     public async Task<WclUserToken> ExchangeCodeAsync(Guid userId, string code, CancellationToken ct = default)
     {
-        var credentials = Convert.ToBase64String(
-                    Encoding.UTF8.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}"));
-
+        var credentials = await BuildBasicCredentialsAsync(ct);
 
         var request = new HttpRequestMessage(HttpMethod.Post, _opts.TokenEndpoint)
         {
@@ -179,8 +180,7 @@ public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOpti
             throw new InvalidOperationException(
                 "WCL token expired and no refresh token available. Re-authorization required.");
 
-        var credentials = Convert.ToBase64String(
-               Encoding.UTF8.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}"));
+        var credentials = await BuildBasicCredentialsAsync(ct);
 
         var request = new HttpRequestMessage(HttpMethod.Post, _opts.TokenEndpoint)
         {
@@ -230,6 +230,13 @@ public partial class WclTokenService(HttpClient httpClient, IOptions<WclAuthOpti
 
 
     // Helpers
+    private async Task<string> BuildBasicCredentialsAsync(CancellationToken ct)
+    {
+        var clientId = await _credentials.GetClientIdAsync(ct);
+        var clientSecret = await _credentials.GetClientSecretAsync(ct);
+        return Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+    }
 
     private static async Task<(string AccessToken, int ExpiresIn, string? RefreshToken)>
         ParseTokenResponseAsync(HttpResponseMessage response, CancellationToken ct)

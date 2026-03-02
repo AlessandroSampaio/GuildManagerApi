@@ -25,12 +25,12 @@ public class WclAuthController(IWclTokenService wclTokenService, IMemoryCache ca
     [HttpGet("authorize")]
     [Authorize]
     [ProducesResponseType(typeof(WclAuthorizeResponseDto), StatusCodes.Status200OK)]
-    public IActionResult Authorize()
+    public async Task<IActionResult> Authorize(CancellationToken ct)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
-        var (authorizeUrl, state) = _wclTokenService.BuildAuthorizeUrl();
+        var (authorizeUrl, state) = await _wclTokenService.BuildAuthorizeUrl(ct);
 
         // Save state + userId e cache for 10min so it can be validated in the callback
         _cache.Set($"{StatePrefix}{state}", userId.Value,
