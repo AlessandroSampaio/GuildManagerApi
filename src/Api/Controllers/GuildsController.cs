@@ -67,7 +67,7 @@ public class GuildsController(IGuildRepository guilds, ICharacterRepository char
         if (guild is null) return NotFound();
 
         var chars = await _characters.GetByGuildAsync(id, ct);
-        var dtos = chars.Select(c => new CharacterDto(c.Id, c.Name, c.Server, c.Class.Name, guild.Name));
+        var dtos = chars.Select(c => new CharacterDto(c.Id, c.Name, c.Server, c.Class?.Name ?? "unknown", guild.Name));
         return Ok(dtos);
     }
 }

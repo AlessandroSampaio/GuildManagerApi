@@ -1,3 +1,4 @@
+
 using GuildManagerApi.Domain.Entities;
 using GuildManagerApi.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Fight> Fights => Set<Fight>();
     public DbSet<Character> Characters => Set<Character>();
+    public DbSet<Class> Classes => Set<Class>();
     public DbSet<Guild> Guilds => Set<Guild>();
     public DbSet<PerformanceEntry> PerformanceEntries => Set<PerformanceEntry>();
     public DbSet<AppUser> Users => Set<AppUser>();
@@ -201,7 +203,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasKey(c => c.Id);
             e.Property(c => c.Name).HasMaxLength(64).IsRequired();
             e.Property(c => c.Server).HasMaxLength(64);
-            e.Property(c => c.Region).HasMaxLength(8);
+            e.Property(c => c.Region).HasMaxLength(20);
             e.HasIndex(c => c.ClassId);
             e.HasIndex(c => new { c.WclActorId, c.Server }).IsUnique();
             e.HasIndex(c => c.GuildId);
@@ -222,7 +224,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(g => g.Id);
             e.Property(g => g.Name).HasMaxLength(64).IsRequired();
-            e.Property(g => g.Region).HasMaxLength(8);
+            e.Property(g => g.Region).HasMaxLength(20);
             e.HasIndex(g => g.Region);
             e.HasIndex(g => g.Name);
         });

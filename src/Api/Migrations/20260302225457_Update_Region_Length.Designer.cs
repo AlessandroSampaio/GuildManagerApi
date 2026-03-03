@@ -3,6 +3,7 @@ using System;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GuildManagerApi.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260302225457_Update_Region_Length")]
+    partial class Update_Region_Length
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -73,7 +76,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("ClassId")
+                    b.Property<int>("ClassId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("GuildId")
@@ -94,8 +97,8 @@ namespace GuildManagerApi.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<long>("WclActorId")
-                        .HasColumnType("bigint");
+                    b.Property<int>("WclActorId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -129,7 +132,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Classes");
+                    b.ToTable("Class");
 
                     b.HasData(
                         new
@@ -772,7 +775,8 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasOne("GuildManagerApi.Domain.Entities.Class", "Class")
                         .WithMany("Characters")
                         .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("GuildManagerApi.Domain.Entities.Guild", "Guild")
                         .WithMany("Characters")

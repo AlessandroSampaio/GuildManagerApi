@@ -7,7 +7,8 @@ namespace GuildManagerApi.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-[Authorize(Policy = "AdminOnly")]
+[Authorize]
+// [Authorize(Policy = "AdminOnly")]
 [Produces("application/json")]
 public class AdminController(IWclCredentialService credentialService) : ControllerBase
 {

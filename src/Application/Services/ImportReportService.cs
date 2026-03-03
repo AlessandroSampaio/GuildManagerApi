@@ -74,20 +74,24 @@ public partial class ImportReportService(
         LogReportStatus(reportCode, fights.Count);
 
         //Upsert characters
+        var classes = await _characters.GetClassesAsync(ct);
+
         var playerActors = wclReport.MasterData.Actors
             .Where(a => a.Type == "Player")
             .ToList();
-        var characterIdMap = new Dictionary<int, int>(); // wclActorId -> localId
+        var characterIdMap = new Dictionary<int, int>(); // GameId -> localId
 
         foreach (var actor in playerActors)
         {
+            var characterClass = classes.FirstOrDefault(c => c.SlugName.Equals(actor.SubType, StringComparison.InvariantCultureIgnoreCase));
             var character = new Character
             {
-                WclActorId = actor.Id,
+                WclActorId = actor.GameId,
                 Name = actor.Name,
                 Server = actor.Server ?? string.Empty,
-                // Class = actor.SubType ?? string.Empty,
-                GuildId = guildId
+                Class = characterClass,
+                GuildId = guildId,
+                Region = wclReport.Guild?.Server.Region.Name ?? string.Empty
             };
             var localId = await _characters.UpsertAsync(character, ct);
             characterIdMap[actor.Id] = localId;
@@ -131,9 +135,9 @@ public partial class ImportReportService(
                     Spec = ranking.Spec,
                     Role = ranking.Role,
                     Amount = (float)ranking.Amount,
-                    RankPercent = ranking.RankPercent.HasValue ? (float)ranking.RankPercent.Value : null,
+                    RankPercent = (float)ranking.RankPercent,
                     TotalParses = ranking.TotalParses,
-                    BestPercent = ranking.BestPercent.HasValue ? (float)ranking.BestPercent.Value : null
+                    BestPercent = (float)ranking.BracketPercent,
                 });
             }
         }

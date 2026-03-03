@@ -34,7 +34,7 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
             character.Id,
             character.Name,
             character.Server,
-            character.Class.Name,
+            character.Class?.Name ?? "unknown",
             character.Guild?.Name,
             [..perf.Select(p => new PerformanceSummaryDto(
                 p.Fight.ReportId,

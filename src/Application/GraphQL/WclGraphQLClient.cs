@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using GuildManagerApi.Infrastructure.Auth;
+using System.Text.Json.Serialization;
+using GuildManagerApi.Application.DTOs.WclRanking;
 
 
 namespace GuildManagerApi.Application.GraphQL;
@@ -23,19 +25,20 @@ public record WclFight(
     bool? Kill,
     int Difficulty);
 public record WclMasterData(List<WclActor> Actors);
-public record WclActor(int Id, string Name, string Type, string? SubType, string? Server);
-public record WclRankingsResponse(WclReportData ReportData);
-public record WclRankingsFight(List<WclPlayerRanking> Rankings);
+public record WclActor(int Id, long GameId, string Name, string Type, string? SubType, string? Server);
 public record WclPlayerRanking(
+    int WclCharacterId,
     string Name,
+    string ServerName,
+    string ServerRegion,
     string Class,
     string Spec,
-    string Role,
+    string Role,           // "tanks" | "healers" | "dps"
     double Amount,
-    double? RankPercent,
-    int? TotalParses,
-    double? BestPercent);
-
+    double RankPercent,
+    double BracketPercent,
+    int TotalParses
+);
 
 public interface IWclGraphQLClient
 {
@@ -53,6 +56,11 @@ public partial class WclGraphQLClient(
     private readonly IWclTokenService _tokenService = tokenService;
     private readonly WclAuthOptions _opts = opts.Value;
 
+    private static readonly JsonSerializerOptions _jsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public async Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default)
     {
         const string query = """
@@ -66,11 +74,11 @@ public partial class WclGraphQLClient(
                             name
                             server { name region { name } }
                           }
-                          fights(killType: All) {
+                          fights(killType: Kills) {
                             id name startTime endTime kill difficulty
                           }
                           masterData(translate: true) {
-                            actors { id name type subType server }
+                            actors { id gameID server name type subType server }
                           }
                         }
                       }
@@ -93,17 +101,13 @@ public partial class WclGraphQLClient(
         foreach (var fightId in fightIdsArray)
         {
             const string query = """
-                           query GetRankings($code: String!, $fightIds: [Int!]!, $metric: DPSMetric) {
-                             reportData {
-                               report(code: $code) {
-                                 rankings(fightIDs: $fightIds, playerMetric: $metric) {
-                                   data {
-                                     name class spec role amount rankPercent totalParses bestPercent
-                                   }
-                                 }
-                               }
-                             }
-                           }
+                            query GetRankings($code: String!, $fightIds: [Int!]!, $metric: ReportRankingMetricType) {
+                              reportData {
+                                report(code: $code) {
+                                  rankings(fightIDs: $fightIds, playerMetric: $metric)
+                                }
+                              }
+                            }
                            """;
 
             try
@@ -116,17 +120,42 @@ public partial class WclGraphQLClient(
                     metric
                 }, userId, ct);
 
-                var data = response
+                var rankingsElement = response
                     .GetProperty("reportData")
                     .GetProperty("report")
-                    .GetProperty("rankings")
-                    .GetProperty("data");
+                    .GetProperty("rankings");
 
-#pragma warning disable CA1869
-                var rankings = JsonSerializer.Deserialize<List<WclPlayerRanking>>(data.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-#pragma warning restore CA1869
+                WclRankingsRoot? root = rankingsElement.ValueKind switch
+                {
+                    // Escalar retornado como string JSON embutida
+                    JsonValueKind.String => JsonSerializer.Deserialize<WclRankingsRoot>(
+                        rankingsElement.GetString()!, _jsonOpts),
 
-                results[fightId] = rankings;
+                    // Objeto JSON direto
+                    JsonValueKind.Object => JsonSerializer.Deserialize<WclRankingsRoot>(
+                        rankingsElement.GetRawText(), _jsonOpts),
+
+                    _ => null
+                };
+
+                if (root is null)
+                {
+                    LogFetchRankingsFail(reportCode, fightId, "Rankings field was null or unexpected kind for fight.");
+                    results[fightId] = [];
+                    continue;
+                }
+
+                var fightData = root.Data.FirstOrDefault(f => f.FightId == fightId)
+                                            ?? root.Data.FirstOrDefault();
+                if (fightData is null)
+                {
+                    LogFetchRankingsFail(reportCode, fightId,
+                        "No fight data found in rankings response for fight.");
+                    results[fightId] = [];
+                    continue;
+                }
+
+                results[fightId] = FlattenRoles(fightData);
             }
             catch (Exception ex)
             {
@@ -137,11 +166,6 @@ public partial class WclGraphQLClient(
         return results;
     }
 
-    /// <summary>
-    /// Resolve which endpoint and token to use
-    ///  - userId informed + authorized user     → private route /api/v2/user + user token
-    ///  - else                                  → public  route /api/v2/client + app token
-    /// </summary>
     private async Task<(string endpoint, string token)> ResolveEndpointAndTokenAsync(
         Guid? userId, CancellationToken ct)
     {
@@ -178,14 +202,45 @@ public partial class WclGraphQLClient(
             throw new InvalidOperationException($"GraphQL error: {errors.GetRawText()}");
 
         var data = doc.GetProperty("data");
-
 #pragma warning disable CA1869
         return JsonSerializer.Deserialize<T>(data.GetRawText(),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException("Null response from WCL");
 #pragma warning restore CA1869
+    }
 
+    private static List<WclPlayerRanking> FlattenRoles(WclRankingsFight fight)
+    {
+        var result = new List<WclPlayerRanking>();
 
+        static void AddGroup(
+            List<WclPlayerRanking> list,
+            WclRoleGroup group,
+            string roleName)
+        {
+            foreach (var c in group.Characters)
+            {
+                list.Add(new WclPlayerRanking(
+                    WclCharacterId: c.Id,
+                    Name: c.Name,
+                    ServerName: c.Server?.Name ?? string.Empty,
+                    ServerRegion: c.Server?.Region ?? string.Empty,
+                    Class: c.Class,
+                    Spec: c.Spec,
+                    Role: roleName,
+                    Amount: c.Amount,
+                    RankPercent: c.RankPercent,
+                    BracketPercent: c.BracketPercent,
+                    TotalParses: c.TotalParses
+                ));
+            }
+        }
+
+        AddGroup(result, fight.Roles.Tanks, "tanks");
+        AddGroup(result, fight.Roles.Healers, "healers");
+        AddGroup(result, fight.Roles.Dps, "dps");
+
+        return result;
     }
 
     [LoggerMessage(LogLevel.Debug, Message = "WCL response: {Json}")]

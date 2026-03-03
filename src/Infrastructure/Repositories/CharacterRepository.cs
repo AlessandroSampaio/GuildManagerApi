@@ -10,18 +10,23 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
 {
     private readonly AppDbContext _context = context;
 
-    public Task<Character?> FindByWclActorAsync(int wclActorId, string server, CancellationToken ct = default)
+    public Task<Character?> FindByWclActorAsync(long wclActorId, string server, CancellationToken ct = default)
         => _context.Characters.FirstOrDefaultAsync(c => c.WclActorId == wclActorId && c.Server.Equals(server), ct);
 
     public async Task<IEnumerable<Character>> GetByGuildAsync(int guildId, CancellationToken ct = default)
         => await _context.Characters.Where(c => c.GuildId == guildId).ToListAsync(ct);
 
+    public async Task<IEnumerable<Class>> GetClassesAsync(CancellationToken ct = default)
+        => await _context.Classes.ToListAsync(ct);
+
     public Task<Character?> GetByIdAsync(int id, CancellationToken ct = default)
         => _context.Characters.FirstOrDefaultAsync(c => c.Id == id, ct);
 
+
+
     public async Task<int> UpsertAsync(Character character, CancellationToken ct = default)
     {
-        var existing = await GetByIdAsync(character.Id, ct);
+        var existing = await FindByWclActorAsync(character.WclActorId, character.Server, ct);
         if (existing is null)
         {
             _context.Characters.Add(character);
