@@ -15,6 +15,7 @@ public class ReportRepository(AppDbContext context) : IReportRepository
     public async Task<IEnumerable<Report>> GetAllAsync(int page, int pageSize, CancellationToken ct = default)
         => await _context.Reports
                 .Include(r => r.Guild)
+                .Include(r => r.Fights)
                 .OrderByDescending(r => r.StartTime)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
