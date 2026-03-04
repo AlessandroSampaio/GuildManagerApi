@@ -214,7 +214,7 @@ public class ReportsController(
         foreach (var fight in report.Fights)
         {
             var entries = await _performance.GetByFightAsync(fight.Id, ct);
-            result[fight.FightIndex] = [..entries.Select(p => new PerformanceDto(
+            result[fight.Id] = [..entries.Select(p => new PerformanceDto(
                 p.FightId,
                 fight.Name,
                 p.Character.Name,
