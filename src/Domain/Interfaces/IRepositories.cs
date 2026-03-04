@@ -1,4 +1,5 @@
 using GuildManagerApi.Domain.Entities;
+using GuildManagerApi.Domain.Enums;
 
 namespace GuildManagerApi.Domain.Interfaces;
 
@@ -8,6 +9,11 @@ public interface IReportRepository
     Task<IEnumerable<Report>> GetAllAsync(int page, int pageSize, CancellationToken ct = default);
     Task UpsertAsync(Report report, CancellationToken ct = default);
     Task<bool> ExistsAsync(string reportId, CancellationToken ct = default);
+    Task SetImportStatusAsync(
+            string reportId,
+            ImportStatus status,
+            string? errorMessage = null,
+            CancellationToken ct = default);
 }
 
 public interface ICharacterRepository

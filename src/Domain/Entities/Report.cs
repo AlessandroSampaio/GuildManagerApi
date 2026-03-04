@@ -1,3 +1,5 @@
+using GuildManagerApi.Domain.Enums;
+
 namespace GuildManagerApi.Domain.Entities;
 
 public class Report
@@ -9,6 +11,8 @@ public class Report
     public int? GuildId { get; set; }
     public DateTime ImportedAt { get; set; }
     public DateTime? LastSyncedAt { get; set; }
+    public ImportStatus ImportStatus { get; set; } = ImportStatus.Queued;
+    public string? ImportError { get; set; }
 
     //Navigation
     public virtual Guild? Guild { get; set; }

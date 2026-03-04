@@ -1,16 +1,5 @@
 namespace GuildManagerApi.Application.DTOs;
 
-// Import
-public record ImportResultDto(
-    string ReportCode,
-    string Title,
-    int FightsImported,
-    int KillsImported,
-    int PlayersImported,
-    int PerformanceEntriesSaved,
-    string? GuildName
-);
-
 // Reports
 public record ReportDto(
     string Id,

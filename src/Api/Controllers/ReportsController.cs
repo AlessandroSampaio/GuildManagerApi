@@ -2,8 +2,13 @@ using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
+using GuildManagerApi.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using GuildManagerApi.Domain.Entities;
+using System.Net.WebSockets;
+using System.Text.Json;
+using System.Text;
 
 namespace GuildManagerApi.Api.Controllers;
 
@@ -12,41 +17,137 @@ namespace GuildManagerApi.Api.Controllers;
 [Produces("application/json")]
 [Authorize]
 public class ReportsController(
-        IImportReportService importService,
+        ImportProgressHub hub,
         IReportRepository reports,
-        IPerformanceRepository performance) : ControllerBase
+        IPerformanceRepository performance,
+        IImportQueue queue) : ControllerBase
 {
-    private readonly IImportReportService _importService = importService;
+    private readonly IImportQueue _queue = queue;
+    private readonly ImportProgressHub _hub = hub;
     private readonly IReportRepository _reports = reports;
     private readonly IPerformanceRepository _performance = performance;
+    private static readonly JsonSerializerOptions _jsonOpts =
+            new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
 
-    /// <summary>
-    /// Imports a report by its code.
-    /// </summary>
-    /// <param name="reportCode">The code of the report to import.</param>
-    /// <param name="ct">The cancellation token.</param>
-    /// <returns>The import result route</returns>
+
     [HttpPost("import/{reportCode}")]
-    [ProducesResponseType(typeof(ImportResultDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ImportAcceptedDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> ImportReport([FromRoute] string reportCode, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(reportCode) || reportCode.Length > 16)
             return BadRequest("Invalid report code");
 
         var userId = GetUserId();
-        var result = await _importService.ImportAsync(reportCode.Trim(), userId, ct);
-        return CreatedAtAction(nameof(GetReport), new { reportCode }, result);
+
+        var existing = await _reports.GetByIdAsync(reportCode, ct);
+        if (existing is { ImportStatus: ImportStatus.Importing or ImportStatus.Queued })
+        {
+            return Conflict(new
+            {
+                error = "This report is already being imported.",
+                status = existing.ImportStatus.ToString()
+            });
+        }
+
+        if (existing is null)
+        {
+            await _reports.UpsertAsync(new Report
+            {
+                Id = reportCode,
+                Title = reportCode,               // placeholder até o worker buscar o título real
+                ImportStatus = ImportStatus.Queued,
+                ImportedAt = DateTime.UtcNow
+            }, ct);
+        }
+        else
+        {
+            await _reports.SetImportStatusAsync(reportCode, ImportStatus.Queued, null, ct);
+        }
+
+        await _queue.EnqueueAsync(new ImportJob(reportCode, userId), ct);
+
+        return AcceptedAtAction(
+            nameof(GetReport),
+            new { reportCode },
+            new ImportAcceptedDto(
+                ReportCode: reportCode,
+                Status: "queued",
+                WsUrl: $"/api/reports/{reportCode}/ws",
+                Message: "Report enfileirado. Conecte-se ao WebSocket para acompanhar o progresso."
+            ));
     }
 
-    /// <summary>
-    /// Gets a list of reports.
-    /// </summary>
-    /// <param name="page">The page number.</param>
-    /// <param name="pageSize">The page size.</param>
-    /// <param name="ct">The cancellation token.</param>
-    /// <returns>A list of report DTOs.</returns>
+    [HttpGet("{reportCode}/ws")]
+    [AllowAnonymous]
+    public async Task StreamProgress(
+            [FromRoute] string reportCode,
+            [FromQuery] string? access_token,
+            CancellationToken ct)
+    {
+        if (!HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await HttpContext.Response.WriteAsync(
+                "Requisição WebSocket esperada. Use ws:// ou wss://.", ct);
+            return;
+        }
+
+        // Aceitar a conexão WebSocket
+        var ws = await HttpContext.WebSockets.AcceptWebSocketAsync();
+
+        // Verificar se o report existe
+        var report = await _reports.GetByIdAsync(reportCode, ct);
+        if (report is null)
+        {
+            await SendAndCloseAsync(ws, new
+            {
+                reportCode,
+                phase = "Failed",
+                phaseCode = 6,
+                message = $"Report '{reportCode}' não encontrado.",
+                timestamp = DateTime.UtcNow
+            }, WebSocketCloseStatus.InvalidPayloadData, ct);
+            return;
+        }
+
+        // Se já está concluído, enviar evento imediato e fechar
+        if (report.ImportStatus == ImportStatus.Done)
+        {
+            await SendAndCloseAsync(ws, new
+            {
+                reportCode,
+                phase = "Completed",
+                phaseCode = 5,
+                message = "Report já importado.",
+                timestamp = DateTime.UtcNow
+            }, WebSocketCloseStatus.NormalClosure, ct);
+            return;
+        }
+
+        // Se falhou, reportar e fechar
+        if (report.ImportStatus == ImportStatus.Failed)
+        {
+            await SendAndCloseAsync(ws, new
+            {
+                reportCode,
+                phase = "Failed",
+                phaseCode = 6,
+                message = report.ImportError ?? "Importação falhou.",
+                timestamp = DateTime.UtcNow
+            }, WebSocketCloseStatus.NormalClosure, ct);
+            return;
+        }
+
+        // Report está Queued ou Importing — registrar e aguardar eventos
+        _hub.Register(reportCode, ws);
+        await _hub.WaitForCloseAsync(ws, ct);
+    }
+
+
+
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<ReportDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetReports(
@@ -133,5 +234,22 @@ public class ReportsController(
         var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
                ?? User.FindFirstValue("sub");
         return sub is null ? null : Guid.Parse(sub);
+    }
+
+
+    private static async Task SendAndCloseAsync(
+           WebSocket ws,
+           object payload,
+           WebSocketCloseStatus closeStatus,
+           CancellationToken ct)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(payload, _jsonOpts);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            await ws.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
+            await ws.CloseAsync(closeStatus, "done", ct);
+        }
+        catch { }
     }
 }
