@@ -8,7 +8,7 @@ namespace GuildManagerApi.Application.Services;
 
 public interface IImportReportService
 {
-    Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, CancellationToken ct = default);
+    Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, IProgress<ImportProgressEvent>? progress = null, CancellationToken ct = default);
 }
 
 public partial class ImportReportService(
@@ -25,11 +25,15 @@ public partial class ImportReportService(
     private readonly IGuildRepository _guilds = guilds;
     private readonly IPerformanceRepository _performance = performance;
 
-    public async Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, CancellationToken ct = default)
+    public async Task<ImportResultDto> ImportAsync(string reportCode, Guid? userId, IProgress<ImportProgressEvent>? progress = null, CancellationToken ct = default)
     {
         LogStartingImport(reportCode);
+        Report(progress, reportCode, ImportPhase.Started,
+                 "Importação iniciada.");
 
         // Fetch report data from WCL
+        Report(progress, reportCode, ImportPhase.FetchingReport,
+            "Buscando dados do report no WarcraftLogs...");
         var wclReport = await _wclClient.GetReportAsync(reportCode, userId, ct);
 
         // Upsert guild
@@ -47,6 +51,8 @@ public partial class ImportReportService(
         }
 
         // Build fights
+        Report(progress, reportCode, ImportPhase.SavingReport,
+            $"Salvando report \"{wclReport.Title}\" com {wclReport.Fights.Count} fights...");
         var fights = wclReport.Fights.Select(f => new Fight
         {
             FightIndex = f.Id,
@@ -103,6 +109,10 @@ public partial class ImportReportService(
                    .Where(f => f.Kill == true)
                    .Select(f => f.FightIndex)
                    .ToList();
+
+        Report(progress, reportCode, ImportPhase.FetchingRankings,
+                 $"Buscando rankings de {killFightIds.Count} kill(s)...",
+                 new { killCount = killFightIds.Count });
         var rankingsMap = new Dictionary<int, List<WclPlayerRanking>>();
 
         if (killFightIds.Count > 0)
@@ -111,6 +121,8 @@ public partial class ImportReportService(
         }
 
         // Build and persist performance entries
+        Report(progress, reportCode, ImportPhase.SavingPerformance,
+                  "Processando e salvando dados de performance...");
         var savedFights = (await _reports.GetByIdAsync(reportCode, ct))!.Fights.ToList();
         var performanceEntries = new List<PerformanceEntry>();
 
@@ -145,9 +157,7 @@ public partial class ImportReportService(
         if (performanceEntries.Count > 0)
             await _performance.BulkUpsertAsync(performanceEntries, ct);
 
-        LogFinishImport(performanceEntries.Count);
-
-        return new ImportResultDto(
+        var result = new ImportResultDto(
             ReportCode: reportCode,
             Title: wclReport.Title,
             FightsImported: fights.Count,
@@ -156,6 +166,23 @@ public partial class ImportReportService(
             PerformanceEntriesSaved: performanceEntries.Count,
             GuildName: wclReport.Guild?.Name
         );
+        LogFinishImport(performanceEntries.Count);
+
+        Report(progress, reportCode, ImportPhase.Completed,
+                 $"Importação concluída. {performanceEntries.Count} entradas de performance salvas.",
+                 result);
+
+        return result;
+    }
+
+    private static void Report(
+         IProgress<ImportProgressEvent>? progress,
+         string reportCode,
+         ImportPhase phase,
+         string message,
+         object? data = null)
+    {
+        progress?.Report(new ImportProgressEvent(reportCode, phase, message, data));
     }
 
 

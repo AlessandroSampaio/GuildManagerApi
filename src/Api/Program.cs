@@ -49,9 +49,9 @@ builder.Services.AddAuthentication(opt =>
     opt.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
-        ValidIssuer = jwtSection["Issuer"] ?? "WarcraftLogsApi",
+        ValidIssuer = jwtSection["Issuer"] ?? "GuildManagerApi",
         ValidateAudience = true,
-        ValidAudience = jwtSection["Audience"] ?? "WarcraftLogsApi",
+        ValidAudience = jwtSection["Audience"] ?? "GuildManagerApi",
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ValidateLifetime = true,
@@ -95,6 +95,11 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IFieldEncryptionService, AesGcmFieldEncryptionService>();
+builder.Services.AddSingleton<IImportQueue, ImportQueue>();
+builder.Services.AddSingleton<ImportProgressHub>();
+
+builder.Services.AddSingleton<IImportProgressHub>(sp =>
+    sp.GetRequiredService<ImportProgressHub>());
 
 // Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();
@@ -102,6 +107,8 @@ builder.Services.AddScoped<ICharacterRepository, CharacterRepository>();
 builder.Services.AddScoped<IGuildRepository, GuildRepository>();
 builder.Services.AddScoped<IPerformanceRepository, PerformanceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+builder.Services.AddHostedService<ImportWorker>();
 
 // API
 // In-memory cache for OAuth state nonces (anti-CSRF)
@@ -130,17 +137,6 @@ builder.Services.AddSwaggerGen(c =>
         BearerFormat = "JWT",
         Description = "Insira o token JWT obtido em POST /api/auth/login"
     });
-
-    // c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    // {
-    //     {
-    //         new OpenApiSecurityScheme
-    //         {
-    //             Scheme = new OpenApiSchemaReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-    //         },
-    //         Array.Empty<string>()
-    //     }
-    // });
 
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);

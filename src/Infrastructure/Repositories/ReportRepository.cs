@@ -1,4 +1,5 @@
 using GuildManagerApi.Domain.Entities;
+using GuildManagerApi.Domain.Enums;
 using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -63,5 +64,19 @@ public class ReportRepository(AppDbContext context) : IReportRepository
         }
 
         await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task SetImportStatusAsync(
+          string reportId,
+          ImportStatus status,
+          string? errorMessage = null,
+          CancellationToken ct = default)
+    {
+        await _context.Reports
+            .Where(r => r.Id == reportId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.ImportStatus, status)
+                .SetProperty(r => r.ImportError, errorMessage),
+                ct);
     }
 }

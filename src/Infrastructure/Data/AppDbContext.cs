@@ -173,8 +173,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasKey(r => r.Id);
                 e.Property(r => r.Id).HasMaxLength(16);
                 e.Property(r => r.Title).HasMaxLength(256).IsRequired();
+                e.Property(r => r.ImportStatus)
+                             .HasConversion<int>()
+                             .HasDefaultValue(ImportStatus.Queued);
+                e.Property(r => r.ImportError).HasMaxLength(512);
                 e.HasIndex(r => r.GuildId);
                 e.HasIndex(r => r.StartTime);
+                e.HasIndex(r => r.ImportStatus);
 
                 e.HasOne(r => r.Guild)
                  .WithMany(g => g.Reports)
