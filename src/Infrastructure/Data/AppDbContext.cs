@@ -1,4 +1,3 @@
-
 using GuildManagerApi.Domain.Entities;
 using GuildManagerApi.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
     public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
+    public DbSet<Player> Players => Set<Player>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -222,6 +222,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(g => g.Characters)
                 .HasForeignKey(c => c.GuildId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(c => c.Player)
+                       .WithMany(p => p.Characters)
+                       .HasForeignKey(c => c.PlayerId)
+                       .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Guild
@@ -294,6 +299,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .HasForeignKey(p => p.CharacterId)
              .OnDelete(DeleteBehavior.Cascade);
         });
+
+
+        builder.Entity<Player>(e =>
+            {
+                e.HasKey(p => p.Id);
+                e.Property(p => p.Name).HasMaxLength(64).IsRequired();
+                e.HasIndex(p => p.Name);
+            });
+
 
         builder.Entity<WclCredential>(e =>
             {

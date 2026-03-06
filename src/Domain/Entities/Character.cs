@@ -10,11 +10,13 @@ public class Character
     public string Region { get; set; } = string.Empty;
     public int? ClassId { get; set; } = 0;
     public int? GuildId { get; set; } = null;
+    public int? PlayerId { get; set; }
 
 
     // Navigation
     public virtual Class? Class { get; set; } = null!;
     public virtual Guild? Guild { get; set; }
+    public virtual Player? Player { get; set; }
     public ICollection<PerformanceEntry>? PerformanceEntries { get; set; } = [];
 
 }
