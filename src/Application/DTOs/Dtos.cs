@@ -58,6 +58,27 @@ public record GuildDto(
     string Region
 );
 
+
+public record GuildListDto(
+    int Id,
+    string Name,
+    string Server,
+    string Region,
+    int CharacterCount,
+    int ReportCount
+);
+
+
+public record RosterEntryDto(
+    int CharacterId,
+    string CharacterName,
+    string Server,
+    string Region,
+    string Class,
+    int? PlayerId,
+    string? PlayerName
+);
+
 // Performance
 public record PerformanceDto(
     int FightId,
