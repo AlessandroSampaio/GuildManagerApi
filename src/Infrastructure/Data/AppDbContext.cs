@@ -17,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
     public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
     public DbSet<Player> Players => Set<Player>();
+    public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
+    public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
