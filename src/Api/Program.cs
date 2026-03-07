@@ -93,6 +93,7 @@ builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
 builder.Services.AddScoped<IImportReportService, ImportReportService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
+builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IFieldEncryptionService, AesGcmFieldEncryptionService>();
 builder.Services.AddSingleton<IImportQueue, ImportQueue>();
