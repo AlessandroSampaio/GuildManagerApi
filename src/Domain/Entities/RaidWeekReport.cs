@@ -9,6 +9,4 @@ public class RaidWeekReport
 
 
     public virtual RaidWeek RaidWeek { get; set; } = null!;
-    public virtual Report Report { get; set; } = null!;
-
 }
