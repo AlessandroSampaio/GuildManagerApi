@@ -90,7 +90,7 @@ public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOpt
             Username = request.Username.Trim(),
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = AppUserRole.Member,
+            Role = AppUserRole.Guest,
         };
 
 
@@ -129,6 +129,6 @@ public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOpt
     }
 
     private static UserInfoDto ToDto(AppUser u) => new(
-           u.Id, u.Username, u.Email, u.Role, u.CreatedAt, u.LastLoginAt);
+           u.Id, u.Username, u.Email, u.Role.ToString(), u.CreatedAt, u.LastLoginAt);
 
 }

@@ -246,7 +246,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Username).HasMaxLength(32).IsRequired();
             e.Property(u => u.Email).HasMaxLength(128).IsRequired();
             e.Property(u => u.PasswordHash).IsRequired();
-            e.Property(u => u.Role);
+            e.Property(u => u.Role)
+                .HasConversion<string>()
+                .HasMaxLength(16)
+                .IsRequired();
             e.HasIndex(u => u.Username).IsUnique();
             e.HasIndex(u => u.Email).IsUnique();
         });

@@ -38,7 +38,7 @@ public record UserInfoDto(
     Guid Id,
     string Username,
     string Email,
-    AppUserRole Role,
+    string Role,
     DateTime CreatedAt,
     DateTime? LastLoginAt
 );
