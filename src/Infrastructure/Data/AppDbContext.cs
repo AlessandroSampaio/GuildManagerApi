@@ -323,5 +323,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(c => c.Label).HasMaxLength(128);
                 e.ToTable("wcl_credentials");
             });
+
+        builder.Entity<ScoringSettings>(e =>
+            {
+                e.HasKey(s => s.Id);
+                e.Property(s => s.Id).ValueGeneratedNever();
+                e.ToTable("scoring_settings");
+            });
+
+        builder.Entity<ScoringTier>(e =>
+            {
+                e.HasKey(t => t.Id);
+                e.Property(t => t.Label).HasMaxLength(64);
+                e.HasIndex(t => t.ScoringSettingsId);
+                e.HasIndex(t => new { t.ScoringSettingsId, t.MinPercent }).IsUnique();
+
+                e.HasOne(t => t.ScoringSettings)
+                    .WithMany(s => s.Tiers)
+                    .HasForeignKey(t => t.ScoringSettingsId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("scoring_tiers");
+            });
     }
 }
