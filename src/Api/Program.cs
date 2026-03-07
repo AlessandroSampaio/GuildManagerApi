@@ -168,16 +168,14 @@ app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
+    Console.WriteLine("Development environment detected. Swagger UI will be available at /api/v1/docs");
     app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/api/v1/docs", "GuildManager API v1");
-        c.RoutePrefix = string.Empty;
-    });
+    app.UseSwaggerUI();
+
 }
 
-app.UseWebSockets();
 
+app.UseWebSockets();
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
