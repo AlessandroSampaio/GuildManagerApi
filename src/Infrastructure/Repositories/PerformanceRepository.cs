@@ -45,4 +45,22 @@ public class PerformanceRepository(AppDbContext context) : IPerformanceRepositor
             .Where(p => p.FightId == fightId)
             .OrderByDescending(p => p.Amount)
             .ToListAsync(ct);
+
+    public async Task<IEnumerable<PerformanceEntry>> GetByReportsAsync(
+        IEnumerable<string> reportCodes,
+        CancellationToken ct = default)
+    {
+        var codes = reportCodes.ToList();
+
+        return await _context.PerformanceEntries
+            .Include(p => p.Fight)
+                .ThenInclude(f => f.Report)
+            .Include(p => p.Character)
+                .ThenInclude(c => c.Player)
+            .Where(p =>
+                codes.Contains(p.Fight.ReportId) &&
+                p.Character.PlayerId != null)
+            .ToListAsync(ct);
+    }
+
 }

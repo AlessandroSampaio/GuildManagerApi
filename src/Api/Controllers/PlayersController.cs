@@ -4,7 +4,7 @@ using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Domain.Entities;
 using GuildManagerApi.Domain.Interfaces;
 
-namespace GuildManagerApi.API.Controllers;
+namespace GuildManagerApi.Api.Controllers;
 
 public record PlayerNameRequest(
     string Name

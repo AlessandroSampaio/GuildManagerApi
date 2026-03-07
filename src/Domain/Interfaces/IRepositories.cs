@@ -42,6 +42,7 @@ public interface IPerformanceRepository
     Task<IEnumerable<PerformanceEntry>> GetByFightAsync(int fightId, CancellationToken ct = default);
     Task<IEnumerable<PerformanceEntry>> GetByCharacterAsync(int characterId, CancellationToken ct = default);
     Task BulkUpsertAsync(IEnumerable<PerformanceEntry> entries, CancellationToken ct = default);
+    Task<IEnumerable<PerformanceEntry>> GetByReportsAsync(IEnumerable<string> reportCodes, CancellationToken ct = default);
 }
 
 
