@@ -19,17 +19,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Player> Players => Set<Player>();
     public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
     public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
+    public DbSet<RaidWeek> RaidWeeks => Set<RaidWeek>();
+    public DbSet<RaidWeekReport> RaidWeekReports => Set<RaidWeekReport>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        // Classes
-        builder.Entity<Class>(e =>
-        {
-            e.HasKey(c => c.Id);
-            e.Property(c => c.Name).HasMaxLength(20).IsRequired();
-            e.Property(c => c.SlugName).HasMaxLength(20);
 
-        });
+        builder.Entity<Class>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Name).HasMaxLength(20).IsRequired();
+                e.Property(c => c.SlugName).HasMaxLength(20);
+                e.ToTable("classes");
+            });
 
         builder.Entity<Class>()
             .HasData(
@@ -110,22 +112,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     Id = 13,
                     Name = "Evoker",
                     SlugName = "Evoker",
+                },
+                new Class()
+                {
+                    Id = 99,
+                    Name = "Unknown",
+                    SlugName = "Unknown",
                 }
             );
 
-        // Specializations
         builder.Entity<Specialization>(e =>
-        {
-            e.HasKey(c => new { c.Id, c.ClassId });
-            e.Property(c => c.Name).HasMaxLength(20).IsRequired();
-            e.Property(c => c.SlugName).HasMaxLength(20);
-            e.HasIndex(c => c.ClassId);
+            {
+                e.HasKey(c => new { c.Id, c.ClassId });
+                e.Property(c => c.Name).HasMaxLength(20).IsRequired();
+                e.Property(c => c.SlugName).HasMaxLength(20);
+                e.HasIndex(c => c.ClassId);
 
-            e.HasOne(c => c.Class)
-                .WithMany(c => c.Specializations)
-                .HasForeignKey(c => c.ClassId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
+                e.HasOne(c => c.Class)
+                    .WithMany(c => c.Specializations)
+                    .HasForeignKey(c => c.ClassId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                e.ToTable("specializations");
+            });
 
         builder.Entity<Specialization>().HasData(
             new Specialization() { Id = 1, ClassId = 1, Name = "Blood", SlugName = "Blood" },
@@ -166,10 +174,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             new Specialization() { Id = 2, ClassId = 12, Name = "Vengeance", SlugName = "Vengeance" },
             new Specialization() { Id = 1, ClassId = 13, Name = "Devastation", SlugName = "Devastation" },
             new Specialization() { Id = 2, ClassId = 13, Name = "Preservation", SlugName = "Preservation" },
-            new Specialization() { Id = 3, ClassId = 13, Name = "Augmentation", SlugName = "Augmentation" }
+            new Specialization() { Id = 3, ClassId = 13, Name = "Augmentation", SlugName = "Augmentation" },
+            new Specialization() { Id = 1, ClassId = 99, Name = "Unknown", SlugName = "Unknown" }
         );
 
-        // Report
         builder.Entity<Report>(e =>
             {
                 e.HasKey(r => r.Id);
@@ -187,132 +195,139 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                  .WithMany(g => g.Reports)
                  .HasForeignKey(r => r.GuildId)
                  .OnDelete(DeleteBehavior.SetNull);
+
+                e.ToTable("reports");
             });
 
-
-        //Fight
         builder.Entity<Fight>(e =>
-        {
-            e.HasKey(f => f.Id);
-            e.Property(f => f.Name).HasMaxLength(128).IsRequired();
-            e.HasIndex(f => f.ReportId);
-            e.HasIndex(f => new { f.ReportId, f.FightIndex }).IsUnique();
+            {
+                e.HasKey(f => f.Id);
+                e.Property(f => f.Name).HasMaxLength(128).IsRequired();
+                e.HasIndex(f => f.ReportId);
+                e.HasIndex(f => new { f.ReportId, f.FightIndex }).IsUnique();
 
-            e.HasOne(f => f.Report)
-                            .WithMany(r => r.Fights)
-                            .HasForeignKey(f => f.ReportId)
-                            .OnDelete(DeleteBehavior.Cascade);
-        });
+                e.HasOne(f => f.Report)
+                                .WithMany(r => r.Fights)
+                    .HasForeignKey(f => f.ReportId)
+                    .OnDelete(DeleteBehavior.Cascade);
 
-        //Character
+                e.ToTable("fights");
+            });
+
         builder.Entity<Character>(e =>
-        {
-            e.HasKey(c => c.Id);
-            e.Property(c => c.Name).HasMaxLength(64).IsRequired();
-            e.Property(c => c.Server).HasMaxLength(64);
-            e.Property(c => c.Region).HasMaxLength(20);
-            e.HasIndex(c => c.ClassId);
-            e.HasIndex(c => new { c.WclActorId, c.Server }).IsUnique();
-            e.HasIndex(c => c.GuildId);
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Name).HasMaxLength(64).IsRequired();
+                e.Property(c => c.Server).HasMaxLength(64);
+                e.Property(c => c.Region).HasMaxLength(20);
+                e.HasIndex(c => c.ClassId);
+                e.HasIndex(c => new { c.WclActorId, c.Server }).IsUnique();
+                e.HasIndex(c => c.GuildId);
 
-            e.HasOne(c => c.Class)
-                .WithMany(c => c.Characters)
-                .HasForeignKey(c => c.ClassId)
-                .OnDelete(DeleteBehavior.Restrict);
+                e.HasOne(c => c.Class)
+                    .WithMany(c => c.Characters)
+                    .HasForeignKey(c => c.ClassId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
-            e.HasOne(c => c.Guild)
-                .WithMany(g => g.Characters)
-                .HasForeignKey(c => c.GuildId)
-                .OnDelete(DeleteBehavior.SetNull);
+                e.HasOne(c => c.Guild)
+                    .WithMany(g => g.Characters)
+                    .HasForeignKey(c => c.GuildId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
-            e.HasOne(c => c.Player)
-                       .WithMany(p => p.Characters)
-                       .HasForeignKey(c => c.PlayerId)
-                       .OnDelete(DeleteBehavior.SetNull);
-        });
+                e.HasOne(c => c.Player)
+                    .WithMany(p => p.Characters)
+                    .HasForeignKey(c => c.PlayerId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
-        // Guild
+
+                e.ToTable("characters");
+            });
+
         builder.Entity<Guild>(e =>
-        {
-            e.HasKey(g => g.Id);
-            e.Property(g => g.Name).HasMaxLength(64).IsRequired();
-            e.Property(g => g.Region).HasMaxLength(20);
-            e.HasIndex(g => g.Region);
-            e.HasIndex(g => g.Name);
-        });
+            {
+                e.HasKey(g => g.Id);
+                e.Property(g => g.Name).HasMaxLength(64).IsRequired();
+                e.Property(g => g.Region).HasMaxLength(20);
+                e.HasIndex(g => g.Region);
+                e.HasIndex(g => g.Name);
 
-        // AppUser
+                e.ToTable("guilds");
+            });
+
         builder.Entity<AppUser>(e =>
-        {
-            e.HasKey(u => u.Id);
-            e.Property(u => u.Username).HasMaxLength(32).IsRequired();
-            e.Property(u => u.Email).HasMaxLength(128).IsRequired();
-            e.Property(u => u.PasswordHash).IsRequired();
-            e.Property(u => u.Role)
-                .HasConversion<string>()
-                .HasMaxLength(16)
-                .IsRequired();
-            e.HasIndex(u => u.Username).IsUnique();
-            e.HasIndex(u => u.Email).IsUnique();
-        });
+            {
+                e.HasKey(u => u.Id);
+                e.Property(u => u.Username).HasMaxLength(32).IsRequired();
+                e.Property(u => u.Email).HasMaxLength(128).IsRequired();
+                e.Property(u => u.PasswordHash).IsRequired();
+                e.Property(u => u.Role)
+                    .HasConversion<string>()
+                    .HasMaxLength(16)
+                    .IsRequired();
+                e.HasIndex(u => u.Username).IsUnique();
+                e.HasIndex(u => u.Email).IsUnique();
 
-        // RefreshToken
+                e.ToTable("users");
+            });
+
         builder.Entity<RefreshToken>(e =>
-        {
-            e.HasKey(t => t.Id);
-            e.Property(t => t.Token).HasMaxLength(128).IsRequired();
-            e.HasIndex(t => t.Token).IsUnique();
-            e.HasIndex(t => t.UserId);
+            {
+                e.HasKey(t => t.Id);
+                e.Property(t => t.Token).HasMaxLength(128).IsRequired();
+                e.HasIndex(t => t.Token).IsUnique();
+                e.HasIndex(t => t.UserId);
 
-            e.HasOne(t => t.User)
-             .WithMany(u => u.RefreshTokens)
-             .HasForeignKey(t => t.UserId)
-             .OnDelete(DeleteBehavior.Cascade);
-        });
+                e.HasOne(t => t.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+                e.ToTable("refresh_tokens");
+            });
 
-        // WclUserToken
         builder.Entity<WclUserToken>(e =>
-        {
-            e.HasKey(t => t.Id);
-            e.Property(t => t.AccessToken).IsRequired();
-            e.Property(t => t.WclRefreshToken);
-            e.HasIndex(t => t.UserId).IsUnique(); // one token per user
+            {
+                e.HasKey(t => t.Id);
+                e.Property(t => t.AccessToken).IsRequired();
+                e.Property(t => t.WclRefreshToken);
+                e.HasIndex(t => t.UserId).IsUnique(); // one token per user
 
-            e.HasOne(t => t.User)
-             .WithOne(u => u.WclToken)
-             .HasForeignKey<WclUserToken>(t => t.UserId)
-             .OnDelete(DeleteBehavior.Cascade);
-        });
+                e.HasOne(t => t.User)
+                .WithOne(u => u.WclToken)
+                .HasForeignKey<WclUserToken>(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        // Performance Entry
+                e.ToTable("wcl_user_tokens");
+            });
+
         builder.Entity<PerformanceEntry>(e =>
-        {
-            e.HasKey(p => p.Id);
-            e.Property(p => p.Spec).HasMaxLength(32);
-            e.Property(p => p.Role).HasMaxLength(16);
-            e.HasIndex(p => p.FightId);
-            e.HasIndex(p => p.CharacterId);
-            e.HasIndex(p => new { p.FightId, p.CharacterId }).IsUnique();
+            {
+                e.HasKey(p => p.Id);
+                e.Property(p => p.Spec).HasMaxLength(32);
+                e.Property(p => p.Role).HasMaxLength(16);
+                e.HasIndex(p => p.FightId);
+                e.HasIndex(p => p.CharacterId);
+                e.HasIndex(p => new { p.FightId, p.CharacterId }).IsUnique();
 
-            e.HasOne(p => p.Fight)
-             .WithMany(f => f.PerformanceEntries)
-             .HasForeignKey(p => p.FightId)
-             .OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(p => p.Fight)
+                .WithMany(f => f.PerformanceEntries)
+                .HasForeignKey(p => p.FightId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            e.HasOne(p => p.Character)
-             .WithMany(c => c.PerformanceEntries)
-             .HasForeignKey(p => p.CharacterId)
-             .OnDelete(DeleteBehavior.Cascade);
-        });
+                e.HasOne(p => p.Character)
+                .WithMany(c => c.PerformanceEntries)
+                .HasForeignKey(p => p.CharacterId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+                e.ToTable("performance_entries");
+            });
 
         builder.Entity<Player>(e =>
             {
                 e.HasKey(p => p.Id);
                 e.Property(p => p.Name).HasMaxLength(64).IsRequired();
                 e.HasIndex(p => p.Name);
+                e.ToTable("players");
             });
-
 
         builder.Entity<WclCredential>(e =>
             {
@@ -344,6 +359,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     .OnDelete(DeleteBehavior.Cascade);
 
                 e.ToTable("scoring_tiers");
+            });
+
+        builder.Entity<RaidWeek>(e =>
+            {
+                e.HasKey(w => w.Id);
+                e.Property(w => w.Label).HasMaxLength(128).IsRequired();
+                // StartsAt deve ser sempre uma terça-feira — validado no controller
+                e.HasIndex(w => w.StartsAt).IsUnique();
+                e.Ignore(w => w.EndsAt);                // propriedade calculada
+                e.ToTable("raid_weeks");
+            });
+
+        builder.Entity<RaidWeekReport>(e =>
+            {
+                e.HasKey(r => r.Id);
+                e.Property(r => r.ReportCode).HasMaxLength(16).IsRequired();
+                // Um mesmo report code não pode aparecer duas vezes na mesma semana
+                e.HasIndex(r => new { r.RaidWeekId, r.ReportCode }).IsUnique();
+
+                e.HasOne(r => r.RaidWeek)
+                .WithMany(w => w.ReportEntries)
+                .HasForeignKey(r => r.RaidWeekId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("raid_week_reports");
             });
     }
 }
