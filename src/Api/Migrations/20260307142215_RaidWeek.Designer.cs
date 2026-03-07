@@ -3,6 +3,7 @@ using System;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GuildManagerApi.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260307142215_RaidWeek")]
+    partial class RaidWeek
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,7 +67,7 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("Username")
                         .IsUnique();
 
-                    b.ToTable("users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Character", b =>
@@ -113,7 +116,7 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("WclActorId", "Server")
                         .IsUnique();
 
-                    b.ToTable("characters", (string)null);
+                    b.ToTable("Characters");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Class", b =>
@@ -136,7 +139,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("classes", (string)null);
+                    b.ToTable("Classes");
 
                     b.HasData(
                         new
@@ -216,12 +219,6 @@ namespace GuildManagerApi.Api.Migrations
                             Id = 13,
                             Name = "Evoker",
                             SlugName = "Evoker"
-                        },
-                        new
-                        {
-                            Id = 99,
-                            Name = "Unknown",
-                            SlugName = "Unknown"
                         });
                 });
 
@@ -264,7 +261,7 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("ReportId", "FightIndex")
                         .IsUnique();
 
-                    b.ToTable("fights", (string)null);
+                    b.ToTable("Fights");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Guild", b =>
@@ -295,7 +292,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasIndex("Region");
 
-                    b.ToTable("guilds", (string)null);
+                    b.ToTable("Guilds");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.PerformanceEntry", b =>
@@ -343,7 +340,7 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("FightId", "CharacterId")
                         .IsUnique();
 
-                    b.ToTable("performance_entries", (string)null);
+                    b.ToTable("PerformanceEntries");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Player", b =>
@@ -369,7 +366,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasIndex("Name");
 
-                    b.ToTable("players", (string)null);
+                    b.ToTable("Players");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaidWeek", b =>
@@ -466,7 +463,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("refresh_tokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Report", b =>
@@ -512,7 +509,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasIndex("StartTime");
 
-                    b.ToTable("reports", (string)null);
+                    b.ToTable("Reports");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.ScoringSettings", b =>
@@ -585,7 +582,7 @@ namespace GuildManagerApi.Api.Migrations
 
                     b.HasIndex("ClassId");
 
-                    b.ToTable("specializations", (string)null);
+                    b.ToTable("Specialization");
 
                     b.HasData(
                         new
@@ -860,13 +857,6 @@ namespace GuildManagerApi.Api.Migrations
                             ClassId = 13,
                             Name = "Augmentation",
                             SlugName = "Augmentation"
-                        },
-                        new
-                        {
-                            Id = 1,
-                            ClassId = 99,
-                            Name = "Unknown",
-                            SlugName = "Unknown"
                         });
                 });
 
@@ -931,7 +921,7 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("wcl_user_tokens", (string)null);
+                    b.ToTable("WclUserTokens");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Character", b =>
