@@ -14,7 +14,7 @@ public class ScoringSettingsRepository(AppDbContext context) : IScoringSettingsR
     public async Task<int?> CalculateScoreAsync(float rankPercent, CancellationToken ct = default)
     {
         var settings = await GetAsync(ct);
-        if (settings is null || settings.Tiers.Count != 0) return null;
+        if (settings is null || settings.Tiers.Count == 0) return null;
 
         // Intervalo semi-aberto [Min, Max), fechado no 100 da última faixa
         var tier = settings.Tiers
@@ -59,51 +59,60 @@ public class ScoringSettingsRepository(AppDbContext context) : IScoringSettingsR
 
         Validate(tierList);
 
-        await using var tx = await _context.Database.BeginTransactionAsync(ct);
+        var strategy = _context.Database.CreateExecutionStrategy();
 
-        try
-        {
-            var settings = await _context.ScoringSettings
-                .Include(s => s.Tiers)
-                .FirstOrDefaultAsync(s => s.Id == 1, ct);
+        var score = await strategy.ExecuteAsync<ScoringSettings?>(
+             async (_ct) =>
+             {
+                 await using var tx = await _context.Database.BeginTransactionAsync(_ct);
 
-            if (settings is null)
-            {
+                 try
+                 {
+                     var settings = await _context.ScoringSettings
+                         .Include(s => s.Tiers)
+                         .FirstOrDefaultAsync(s => s.Id == 1, _ct);
 
-                settings = new() { Id = 1 };
-                _context.ScoringSettings.Add(settings);
-                await _context.SaveChangesAsync(ct);
-            }
-            else
-            {
-                _context.ScoringTiers.RemoveRange(settings.Tiers);
-                settings.Tiers.Clear();
-            }
+                     if (settings is null)
+                     {
 
-            foreach (var input in tierList.OrderBy(t => t.MinPercent))
-            {
-                settings.Tiers.Add(new ScoringTier
-                {
-                    MinPercent = input.MinPercent,
-                    MaxPercent = input.MaxPercent,
-                    Points = input.Points,
-                    Label = input.Label?.Trim() ?? "unknown",
-                    ScoringSettingsId = 1,
-                });
-            }
+                         settings = new() { Id = 1 };
+                         _context.ScoringSettings.Add(settings);
+                         await _context.SaveChangesAsync(_ct);
+                     }
+                     else
+                     {
+                         _context.ScoringTiers.RemoveRange(settings.Tiers);
+                         settings.Tiers.Clear();
+                     }
 
-            settings.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+                     foreach (var input in tierList.OrderBy(t => t.MinPercent))
+                     {
+                         settings.Tiers.Add(new ScoringTier
+                         {
+                             MinPercent = input.MinPercent,
+                             MaxPercent = input.MaxPercent,
+                             Points = input.Points,
+                             Label = input.Label?.Trim() ?? "unknown",
+                             ScoringSettingsId = 1,
+                         });
+                     }
 
-            _cache = null; // invalidar cache
-            return (await GetAsync(ct))!;
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+                     settings.UpdatedAt = DateTime.UtcNow;
+                     await _context.SaveChangesAsync(_ct);
+                     await tx.CommitAsync(_ct);
+
+                     _cache = null; // invalidar cache
+                     return (await GetAsync(_ct))!;
+                 }
+                 catch
+                 {
+                     await tx.RollbackAsync(_ct);
+                     throw;
+                 }
+             }, ct
+         );
+
+        return score ?? throw new ScoringValidationException("Scoring settings not found.");
     }
 
 
