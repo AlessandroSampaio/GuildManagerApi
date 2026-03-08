@@ -78,7 +78,8 @@ builder.Services.AddAuthentication(opt =>
 
 
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
+    .AddPolicy("AdminOnly", p => p.RequireRole("Admin"))
+    .AddPolicy("MemberOrAdmin", p => p.RequireRole("Member", "Admin"));
 
 
 // HTTP Clients
