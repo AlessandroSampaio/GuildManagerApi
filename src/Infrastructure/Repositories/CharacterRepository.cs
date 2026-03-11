@@ -58,7 +58,7 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
         if (!string.IsNullOrWhiteSpace(query))
         {
             var lower = query.Trim().ToLower();
-            q = q.Where(c => c.Name.Contains(lower, StringComparison.OrdinalIgnoreCase));
+            q = q.Where(c => c.Name.ToLower().Contains(lower));
         }
 
         if (!string.IsNullOrWhiteSpace(className))
