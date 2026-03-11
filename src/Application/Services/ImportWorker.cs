@@ -43,11 +43,15 @@ public sealed partial class ImportWorker(
 
         try
         {
+            await reportRepo.SetImportStatusAsync(job.ReportCode, ImportStatus.Importing, ct: default);
+
             await importService.ImportAsync(
                 job.ReportCode,
                 job.UserId,
                 progress: progress,
                 ct: ct);
+
+            await reportRepo.SetImportStatusAsync(job.ReportCode, ImportStatus.Done, ct: default);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
