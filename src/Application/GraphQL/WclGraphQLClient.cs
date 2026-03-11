@@ -43,7 +43,7 @@ public record WclPlayerRanking(
 public interface IWclGraphQLClient
 {
     Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default);
-    Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, string metric = "dps", CancellationToken ct = default);
+    Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, CancellationToken ct = default);
 }
 
 public partial class WclGraphQLClient(
@@ -90,79 +90,52 @@ public partial class WclGraphQLClient(
         return response.ReportData.Report;
     }
 
-    public async Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, string metric = "dps", CancellationToken ct = default)
+    public async Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, CancellationToken ct = default)
     {
         var fightIdsArray = fightIds.ToArray();
-        LogFetchRankings(reportCode, fightIdsArray.Length, metric);
+        LogFetchRankings(reportCode, fightIdsArray.Length);
 
         var results = new Dictionary<int, List<WclPlayerRanking>>();
 
         // Wcl API: Search ranking for each fight and store in results dictionary
         foreach (var fightId in fightIdsArray)
         {
-            const string query = """
-                            query GetRankings($code: String!, $fightIds: [Int!]!, $metric: ReportRankingMetricType) {
-                              reportData {
-                                report(code: $code) {
-                                  rankings(fightIDs: $fightIds, playerMetric: $metric)
-                                }
-                              }
-                            }
-                           """;
-
             try
             {
+                // Execute both metric queries in parallel.
+                // dpsTask  → Amount = DPS for tanks and dps players
+                // hpsTask  → Amount = HPS for healers
+                var dpsTask = FetchRankingsRawAsync(reportCode, fightId, "dps", userId, ct);
+                var hpsTask = FetchRankingsRawAsync(reportCode, fightId, "hps", userId, ct);
 
-                var response = await ExecuteQueryAsync<JsonElement>(query, new
+                await Task.WhenAll(dpsTask, hpsTask);
+
+                var dpsFight = dpsTask.Result;
+                var hpsFight = hpsTask.Result;
+
+                if (dpsFight is null && hpsFight is null)
                 {
-                    code = reportCode,
-                    fightIds = new[] { fightId },
-                    metric
-                }, userId, ct);
-
-                var rankingsElement = response
-                    .GetProperty("reportData")
-                    .GetProperty("report")
-                    .GetProperty("rankings");
-
-                WclRankingsRoot? root = rankingsElement.ValueKind switch
-                {
-                    // Escalar retornado como string JSON embutida
-                    JsonValueKind.String => JsonSerializer.Deserialize<WclRankingsRoot>(
-                        rankingsElement.GetString()!, _jsonOpts),
-
-                    // Objeto JSON direto
-                    JsonValueKind.Object => JsonSerializer.Deserialize<WclRankingsRoot>(
-                        rankingsElement.GetRawText(), _jsonOpts),
-
-                    _ => null
-                };
-
-                if (root is null)
-                {
-                    LogFetchRankingsFail(reportCode, fightId, "Rankings field was null or unexpected kind for fight.");
+                    _logger.LogWarning(
+                        "Both dps and hps ranking queries returned null for fight {FightId}", fightId);
                     results[fightId] = [];
                     continue;
                 }
 
-                var fightData = root.Data.FirstOrDefault(f => f.FightId == fightId)
-                                            ?? root.Data.FirstOrDefault();
-                if (fightData is null)
-                {
-                    LogFetchRankingsFail(reportCode, fightId,
-                        "No fight data found in rankings response for fight.");
-                    results[fightId] = [];
-                    continue;
-                }
+                // Merge: tanks+dps come from the dps query (correct DPS amount),
+                //        healers come from the hps query (correct HPS amount).
+                results[fightId] = MergeRoles(dpsFight, hpsFight);
 
-                results[fightId] = FlattenRoles(fightData);
+                _logger.LogDebug(
+                    "Fight {FightId}: {Count} players after role-aware merge",
+                    fightId, results[fightId].Count);
             }
             catch (Exception ex)
             {
-                LogFetchRankingsFail(reportCode, fightId, ex.Message);
+                _logger.LogWarning(ex, "Could not fetch rankings for fight {FightId}", fightId);
                 results[fightId] = [];
             }
         }
+
         return results;
     }
 
@@ -209,45 +182,115 @@ public partial class WclGraphQLClient(
 #pragma warning restore CA1869
     }
 
-    private static List<WclPlayerRanking> FlattenRoles(WclRankingsFight fight)
+    private async Task<WclRankingsFight?> FetchRankingsRawAsync(
+        string reportCode, int fightId, string metric, Guid? userId, CancellationToken ct)
+    {
+        // `rankings` é um escalar JSON no schema do WCL — NÃO aceita subcampos.
+        // Solicitamos o campo diretamente; o servidor retorna o JSON como string
+        // embutida no campo GraphQL escalar, que depois deserializamos manualmente.
+        const string query = """
+            query GetRankings($code: String!, $fightIds: [Int!]!, $metric: DPSMetric) {
+              reportData {
+                report(code: $code) {
+                  rankings(fightIDs: $fightIds, playerMetric: $metric)
+                }
+              }
+            }
+            """;
+
+        var resp = await ExecuteQueryAsync<JsonElement>(
+            query,
+            new { code = reportCode, fightIds = new[] { fightId }, metric },
+            userId, ct);
+
+        var rankingsElement = resp
+            .GetProperty("reportData")
+            .GetProperty("report")
+            .GetProperty("rankings");
+
+        WclRankingsRoot? root = rankingsElement.ValueKind switch
+        {
+            // Escalar retornado como string JSON embutida
+            JsonValueKind.String => JsonSerializer.Deserialize<WclRankingsRoot>(
+                rankingsElement.GetString()!, _jsonOpts),
+
+            // Objeto JSON direto
+            JsonValueKind.Object => JsonSerializer.Deserialize<WclRankingsRoot>(
+                rankingsElement.GetRawText(), _jsonOpts),
+
+            _ => null
+        };
+
+        if (root is null)
+        {
+            _logger.LogWarning(
+                "rankings field was null or unexpected kind ({Kind}) for fight {FightId}, metric={Metric}",
+                rankingsElement.ValueKind, fightId, metric);
+            return null;
+        }
+
+        // Localizar o fight correspondente dentro do array `data[]`
+        // (a API pode retornar dados de múltiplos fights mesmo quando pedimos um)
+        var fightData = root.Data.FirstOrDefault(f => f.FightId == fightId)
+                     ?? root.Data.FirstOrDefault();
+
+        if (fightData is null)
+        {
+            logger.LogWarning(
+                "No fight data found in rankings response for fight {FightId}, metric={Metric}",
+                fightId, metric);
+        }
+
+        return fightData;
+    }
+
+    private static List<WclPlayerRanking> MergeRoles(
+        WclRankingsFight? dpsFight, WclRankingsFight? hpsFight)
     {
         var result = new List<WclPlayerRanking>();
 
-        static void AddGroup(
-            List<WclPlayerRanking> list,
-            WclRoleGroup group,
-            string roleName)
+        if (dpsFight is not null)
         {
-            foreach (var c in group.Characters)
-            {
-                list.Add(new WclPlayerRanking(
-                    WclCharacterId: c.Id,
-                    Name: c.Name,
-                    ServerName: c.Server?.Name ?? string.Empty,
-                    ServerRegion: c.Server?.Region ?? string.Empty,
-                    Class: c.Class,
-                    Spec: c.Spec,
-                    Role: roleName,
-                    Amount: c.Amount,
-                    RankPercent: c.RankPercent,
-                    BracketPercent: c.BracketPercent,
-                    TotalParses: c.TotalParses
-                ));
-            }
+            AddGroup(result, dpsFight.Roles.Tanks, "tanks");
+            AddGroup(result, dpsFight.Roles.Dps, "dps");
         }
 
-        AddGroup(result, fight.Roles.Tanks, "tanks");
-        AddGroup(result, fight.Roles.Healers, "healers");
-        AddGroup(result, fight.Roles.Dps, "dps");
+        if (hpsFight is not null)
+        {
+            AddGroup(result, hpsFight.Roles.Healers, "healers");
+        }
 
         return result;
+    }
+
+    private static void AddGroup(
+        List<WclPlayerRanking> list,
+        WclRoleGroup group,
+        string roleName)
+    {
+        foreach (var c in group.Characters)
+        {
+            list.Add(new WclPlayerRanking(
+                WclCharacterId: c.Id,
+                Name: c.Name,
+                ServerName: c.Server?.Name ?? string.Empty,
+                ServerRegion: c.Server?.Region ?? string.Empty,
+                Class: c.Class,
+                Spec: c.Spec,
+                Role: roleName,
+                Amount: c.Amount,
+                RankPercent: c.RankPercent,
+                BracketPercent: c.BracketPercent,
+                TotalParses: c.TotalParses
+            ));
+        }
     }
 
     [LoggerMessage(LogLevel.Debug, Message = "WCL response: {Json}")]
     private partial void LogWclResponse(string json);
 
-    [LoggerMessage(LogLevel.Information, Message = "Fetching rankings for report {ReportCode}, {FightIdsCount} fights, metric {Metric}")]
-    private partial void LogFetchRankings(string reportCode, int fightIdsCount, string metric);
+    [LoggerMessage(LogLevel.Information, Message = "Fetching rankings for report {ReportCode}, {FightIdsCount} fights")]
+    private partial void LogFetchRankings(string reportCode, int fightIdsCount);
 
     [LoggerMessage(LogLevel.Warning, Message = "Could not fetch rankings for fight {FightId} in report {ReportCode}. Reason : {Message}")]
     private partial void LogFetchRankingsFail(string reportCode, int FightId, string message);
