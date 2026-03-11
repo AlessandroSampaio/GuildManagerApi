@@ -5,8 +5,6 @@ using GuildManagerApi.Domain.Interfaces;
 
 namespace GuildManagerApi.Api.Controllers;
 
-// ── CharactersController ──────────────────────────────────────────────────────
-
 [ApiController]
 [Route("api/characters")]
 [Produces("application/json")]
@@ -47,5 +45,36 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
         );
 
         return Ok(dto);
+    }
+
+    /// <summary>
+    /// Busca characters por nome (substring) e/ou classe, paginado.
+    /// Retorna o player vinculado se houver.
+    /// </summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(PagedResult<CharacterSearchResultDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? q = null,
+        [FromQuery] string? className = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        page = Math.Max(1, page);
+
+        var (items, total) = await _characters.SearchAsync(q, className, page, pageSize, ct);
+
+        var dtos = items.Select(c => new CharacterSearchResultDto(
+            c.Id,
+            c.Name,
+            c.Server,
+            c.Class?.Name ?? "unknown",
+            c.Guild?.Name,
+            c.PlayerId,
+            c.Player?.Name
+        )).ToList();
+
+        return Ok(new PagedResult<CharacterSearchResultDto>(dtos, page, pageSize, total));
     }
 }

@@ -42,4 +42,36 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
         await _context.SaveChangesAsync(ct);
         return existing.Id;
     }
+
+    public async Task<(IEnumerable<Character> Items, int Total)> SearchAsync(
+        string? query,
+        string? className,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var q = _context.Characters
+            .Include(c => c.Guild)
+            .Include(c => c.Player)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var lower = query.Trim().ToLower();
+            q = q.Where(c => c.Name.Contains(lower, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(className))
+            q = q.Where(c => c.Class != null && c.Class!.Name == className);
+
+        var total = await q.CountAsync(ct);
+
+        var items = await q
+            .OrderBy(c => c.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }

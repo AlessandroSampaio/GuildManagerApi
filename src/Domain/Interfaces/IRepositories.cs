@@ -23,6 +23,12 @@ public interface ICharacterRepository
     Task<IEnumerable<Character>> GetByGuildAsync(int guildId, CancellationToken ct = default);
     Task<int> UpsertAsync(Character character, CancellationToken ct = default);
     Task<IEnumerable<Class>> GetClassesAsync(CancellationToken ct = default);
+    Task<(IEnumerable<Character> Items, int Total)> SearchAsync(
+        string? query,
+        string? className,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
 }
 
 public interface IGuildRepository

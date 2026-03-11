@@ -50,6 +50,16 @@ public record CharacterDetailDto(
     List<PerformanceSummaryDto> RecentPerformance
 );
 
+public record CharacterSearchResultDto(
+    int Id,
+    string Name,
+    string Server,
+    string Class,
+    string? GuildName,
+    int? PlayerId,
+    string? PlayerName
+);
+
 // Guilds
 public record GuildDto(
     int Id,
