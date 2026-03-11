@@ -105,13 +105,8 @@ public partial class WclGraphQLClient(
                 // Execute both metric queries in parallel.
                 // dpsTask  → Amount = DPS for tanks and dps players
                 // hpsTask  → Amount = HPS for healers
-                var dpsTask = FetchRankingsRawAsync(reportCode, fightId, "dps", userId, ct);
-                var hpsTask = FetchRankingsRawAsync(reportCode, fightId, "hps", userId, ct);
-
-                await Task.WhenAll(dpsTask, hpsTask);
-
-                var dpsFight = dpsTask.Result;
-                var hpsFight = hpsTask.Result;
+                var dpsFight = await FetchRankingsRawAsync(reportCode, fightId, "dps", userId, ct);
+                var hpsFight = await FetchRankingsRawAsync(reportCode, fightId, "hps", userId, ct);
 
                 if (dpsFight is null && hpsFight is null)
                 {
