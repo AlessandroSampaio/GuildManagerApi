@@ -24,6 +24,7 @@ public class WclAuthOptions
     public string PrivateGraphQlEndpoint { get; set; } = "https://www.warcraftlogs.com/api/v2/user";
     /// <summary>URI de callback registrada no painel do WarcraftLogs.</summary>
     public string RedirectUri { get; set; } = "http://localhost:5000/api/wcl-auth/callback";
+    public string FrontendCallbackUrl { get; set; } = "http://localhost:1420";
 }
 
 

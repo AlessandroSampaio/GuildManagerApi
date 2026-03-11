@@ -4,6 +4,7 @@ using GuildManagerApi.Infrastructure.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace GuildManagerApi.Api.Controllers;
 
@@ -11,11 +12,12 @@ namespace GuildManagerApi.Api.Controllers;
 [ApiController]
 [Route("api/wcl-auth")]
 [Produces("application/json")]
-public class WclAuthController(IWclTokenService wclTokenService, IMemoryCache cache) : ControllerBase
+public class WclAuthController(IWclTokenService wclTokenService, IMemoryCache cache, IOptions<WclAuthOptions> opts) : ControllerBase
 {
     private readonly IWclTokenService _wclTokenService = wclTokenService;
     private readonly IMemoryCache _cache = cache;
     private const string StatePrefix = "wcl_oauth_state:";
+    private readonly WclAuthOptions _opts = opts.Value;
 
 
     /// <summary>
@@ -51,28 +53,35 @@ public class WclAuthController(IWclTokenService wclTokenService, IMemoryCache ca
         [FromQuery] string? error = null,
         CancellationToken ct = default)
     {
-        // User denied
+        var frontendBase = _opts.FrontendCallbackUrl.TrimEnd('/');
+
+        // Usuário negou o acesso
         if (!string.IsNullOrEmpty(error))
-            return BadRequest(new { error = $"WarcraftLogs authorization denied: {error}" });
+            return RedirectToFrontend(frontendBase, false,
+                $"WarcraftLogs negou o acesso: {error}");
 
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
-            return BadRequest(new { error = "Missing code or state parameter." });
+            return RedirectToFrontend(frontendBase, false,
+                "Parâmetros obrigatórios ausentes (code/state).");
 
-        // Validate the cached state to prevent  CSRF
+        // Valida o state para prevenir CSRF
         var cacheKey = $"{StatePrefix}{state}";
         if (!_cache.TryGetValue(cacheKey, out Guid userId))
-            return BadRequest(new { error = "Invalid or expired state. Please restart the authorization flow." });
+            return RedirectToFrontend(frontendBase, false,
+                "State inválido ou expirado. Reinicie o fluxo de autorização.");
 
         _cache.Remove(cacheKey);
 
-        var token = await _wclTokenService.ExchangeCodeAsync(userId, code, ct);
-
-        return Ok(new WclCallbackResponseDto(
-            Message: "WarcraftLogs access authorized successfully.",
-            UserId: userId,
-            ExpiresAt: token.ExpiresAt,
-            HasRefreshToken: !string.IsNullOrEmpty(token.WclRefreshToken)
-        ));
+        try
+        {
+            await _wclTokenService.ExchangeCodeAsync(userId, code, ct);
+            return RedirectToFrontend(frontendBase, true, "Autorização concluída com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            return RedirectToFrontend(frontendBase, false,
+                $"Falha ao trocar código por token: {ex.Message}");
+        }
     }
 
     [HttpGet("status")]
@@ -98,6 +107,14 @@ public class WclAuthController(IWclTokenService wclTokenService, IMemoryCache ca
 
         await _wclTokenService.RevokeUserTokenAsync(userId.Value, ct);
         return NoContent();
+    }
+
+    private RedirectResult RedirectToFrontend(string baseUrl, bool success, string message)
+    {
+        var encoded = Uri.EscapeDataString(message);
+        // HashRouter do SolidJS usa #/ — a rota /wcl-callback fica em /#/wcl-callback
+        var url = $"{baseUrl}/#/wcl-callback?success={success.ToString().ToLower()}&message={encoded}";
+        return Redirect(url);
     }
 
     private Guid? GetUserId()
