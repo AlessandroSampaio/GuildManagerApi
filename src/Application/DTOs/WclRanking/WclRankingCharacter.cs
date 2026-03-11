@@ -30,10 +30,12 @@ public class WclRankingCharacter
     public double BracketPercent { get; set; }
 
     [JsonPropertyName("rank")]
-    public string? Rank { get; set; }
+    [JsonConverter(typeof(JsonAproximatedRankingConverter))]
+    public int Rank { get; set; }
 
     [JsonPropertyName("best")]
-    public string? Best { get; set; }
+    [JsonConverter(typeof(JsonAproximatedRankingConverter))]
+    public int Best { get; set; }
 
     [JsonPropertyName("totalParses")]
     public int TotalParses { get; set; }
