@@ -115,7 +115,7 @@ public partial class WclGraphQLClient(
 
                 if (dpsFight is null && hpsFight is null)
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Both dps and hps ranking queries returned null for fight {FightId}", fightId);
                     results[fightId] = [];
                     continue;
@@ -125,13 +125,10 @@ public partial class WclGraphQLClient(
                 //        healers come from the hps query (correct HPS amount).
                 results[fightId] = MergeRoles(dpsFight, hpsFight);
 
-                _logger.LogDebug(
-                    "Fight {FightId}: {Count} players after role-aware merge",
-                    fightId, results[fightId].Count);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not fetch rankings for fight {FightId}", fightId);
+                logger.LogWarning(ex, "Could not fetch rankings for fight {FightId}", fightId);
                 results[fightId] = [];
             }
         }
@@ -223,7 +220,7 @@ public partial class WclGraphQLClient(
 
         if (root is null)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 "rankings field was null or unexpected kind ({Kind}) for fight {FightId}, metric={Metric}",
                 rankingsElement.ValueKind, fightId, metric);
             return null;
@@ -291,7 +288,4 @@ public partial class WclGraphQLClient(
 
     [LoggerMessage(LogLevel.Information, Message = "Fetching rankings for report {ReportCode}, {FightIdsCount} fights")]
     private partial void LogFetchRankings(string reportCode, int fightIdsCount);
-
-    [LoggerMessage(LogLevel.Warning, Message = "Could not fetch rankings for fight {FightId} in report {ReportCode}. Reason : {Message}")]
-    private partial void LogFetchRankingsFail(string reportCode, int FightId, string message);
 }

@@ -117,7 +117,7 @@ public partial class ImportReportService(
 
         if (killFightIds.Count > 0)
         {
-            rankingsMap = await _wclClient.GetRankingsAsync(reportCode, killFightIds, userId, "dps", ct);
+            rankingsMap = await _wclClient.GetRankingsAsync(reportCode, killFightIds, userId, ct);
         }
 
         // Build and persist performance entries
