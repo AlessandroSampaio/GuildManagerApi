@@ -186,7 +186,7 @@ public partial class WclGraphQLClient(
         // Solicitamos o campo diretamente; o servidor retorna o JSON como string
         // embutida no campo GraphQL escalar, que depois deserializamos manualmente.
         const string query = """
-            query GetRankings($code: String!, $fightIds: [Int!]!, $metric: DPSMetric) {
+            query GetRankings($code: String!, $fightIds: [Int!]!, $metric: ReportRankingMetricType) {
               reportData {
                 report(code: $code) {
                   rankings(fightIDs: $fightIds, playerMetric: $metric)
