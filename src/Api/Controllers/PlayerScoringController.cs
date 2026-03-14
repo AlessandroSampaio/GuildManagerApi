@@ -15,7 +15,8 @@ public class PlayerScoringController(
         IPerformanceRepository performance,
         IReportRepository reports,
         IScoringSettingsRepository scoring,
-        IRaidWeekRepository raidWeeks) : ControllerBase
+        IRaidWeekRepository raidWeeks,
+        IPenaltyRepository penalties) : ControllerBase
 {
     private const int MaxReportCodes = 20;
 
@@ -23,6 +24,7 @@ public class PlayerScoringController(
     private readonly IReportRepository _reports = reports;
     private readonly IScoringSettingsRepository _scoring = scoring;
     private readonly IRaidWeekRepository _raidWeeks = raidWeeks;
+    private readonly IPenaltyRepository _penalties = penalties;
 
     [HttpPost]
     [ProducesResponseType(typeof(PlayerScoringResult), StatusCodes.Status200OK)]
@@ -47,7 +49,7 @@ public class PlayerScoringController(
         if (codes.Count == 0)
             return BadRequest(new { error = "No valid report codes provided." });
 
-        return await RunCalculation(codes, raidWeek: null, ct);
+        return await RunCalculation(codes, raidWeek: null, weekPenalties: [], ct);
     }
 
     // ── Endpoint: por semana de raid ──────────────────────────────────────────
@@ -83,7 +85,8 @@ public class PlayerScoringController(
                 suggestion = $"Add reports via POST /api/raid-weeks/{week.Id}/reports/{{reportCode}}"
             });
 
-        return await RunCalculation(codes, raidWeek: week, ct);
+        var weekPenalties = await _penalties.GetPenaltiesByWeekAsync(week.Id, ct);
+        return await RunCalculation(codes, raidWeek: week, weekPenalties: [.. weekPenalties], ct);
     }
 
     // ── Core calculation (shared by both endpoints) ───────────────────────────
@@ -91,11 +94,12 @@ public class PlayerScoringController(
     private async Task<IActionResult> RunCalculation(
         List<string> codes,
         RaidWeek? raidWeek,
+        List<PlayerWeekPenalty> weekPenalties,
         CancellationToken ct)
     {
         // 1. Verificar ScoringSettings
         var settings = await _scoring.GetAsync(ct);
-        if (settings is null || !settings.Tiers.Any())
+        if (settings is null || settings.Tiers.Count == 0)
             return NotFound(new
             {
                 error = "Scoring settings have not been configured. " +
@@ -201,7 +205,7 @@ public class PlayerScoringController(
                     .OrderByDescending(c => c.TotalPoints)
                     .ToList();
 
-                int playerPoints = characterScores.Sum(c => c.TotalPoints);
+                int performancePoints = characterScores.Sum(c => c.TotalPoints);
                 int scored = characterScores.Sum(c => c.Fights.Count(f => f.Points.HasValue));
                 int unscored = characterScores.Sum(c => c.Fights.Count(f => !f.Points.HasValue));
                 var allRanks = characterScores
@@ -211,14 +215,34 @@ public class PlayerScoringController(
                                        .ToList();
                 float? playerAvgRank = allRanks.Count > 0 ? allRanks.Average() : null;
 
+                var playerPenalties = weekPenalties
+                    .Where(p => p.PlayerId == player.Id)
+                    .Select(p => new PlayerWeekPenaltyDto(
+                        p.Id,
+                        p.PlayerId,
+                        p.Player.Name,
+                        p.RaidWeekId,
+                        p.PenaltyEventId,
+                        p.PenaltyEvent.Description,
+                        p.PenaltyEvent.Points,
+                        p.Note,
+                        p.CreatedAt))
+                    .ToList();
+
+                int penaltyPoints = playerPenalties.Sum(p => p.Points);
+                int totalPoints = performancePoints - penaltyPoints;
+
                 return new PlayerScoreDto(
                     PlayerId: player.Id,
                     PlayerName: player.Name,
-                    TotalPoints: playerPoints,
+                    PerformancePoints: performancePoints,
+                    PenaltyPoints: penaltyPoints,
+                    TotalPoints: totalPoints,
                     AverageRankPercent: playerAvgRank,
                     ScoredEntries: scored,
                     UnscoredEntries: unscored,
-                    Characters: characterScores
+                    Characters: characterScores,
+                    Penalties: playerPenalties
                 );
             })
             .OrderByDescending(p => p.TotalPoints)
@@ -228,9 +252,8 @@ public class PlayerScoringController(
         // 5. Montar resposta
         var settingsDto = new ScoringSettingsDto(
             settings.UpdatedAt,
-            tiers.Select(t => new ScoringTierDto(
-                t.Id, t.MinPercent, t.MaxPercent, t.Points, t.Label))
-            .ToList()
+            [.. tiers.Select(t => new ScoringTierDto(
+                t.Id, t.MinPercent, t.MaxPercent, t.Points, t.Label))]
         );
 
         var raidWeekContext = raidWeek is null ? null : new RaidWeekSummaryDto(

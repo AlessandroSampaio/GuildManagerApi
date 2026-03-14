@@ -11,9 +11,14 @@ namespace GuildManagerApi.Api.Controllers;
 [Route("api/raid-weeks")]
 [Produces("application/json")]
 [Authorize(Policy = "MemberOrAdmin")]
-public class RaidWeeksController(IRaidWeekRepository repository) : ControllerBase
+public class RaidWeeksController(
+        IRaidWeekRepository repository,
+        IPenaltyRepository penalties,
+        IPlayerRepository players) : ControllerBase
 {
     private readonly IRaidWeekRepository _repository = repository;
+    private readonly IPenaltyRepository _penalties = penalties;
+    private readonly IPlayerRepository _players = players;
 
 
 
@@ -192,6 +197,79 @@ public class RaidWeeksController(IRaidWeekRepository repository) : ControllerBas
 
 
 
+    // ── Penalidades da semana ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Lista todas as penalidades aplicadas a players nessa semana de raid.
+    /// </summary>
+    [HttpGet("{id:int}/penalties")]
+    [ProducesResponseType(typeof(IEnumerable<PlayerWeekPenaltyDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPenalties([FromRoute] int id, CancellationToken ct)
+    {
+        var weekExists = await _repository.GetByIdAsync(id, ct);
+        if (weekExists is null) return NotFound();
+
+        var items = await _penalties.GetPenaltiesByWeekAsync(id, ct);
+        return Ok(items.Select(ToPenaltyDto));
+    }
+
+    /// <summary>
+    /// Aplica uma penalidade a um player na semana de raid informada.
+    /// </summary>
+    [HttpPost("{id:int}/penalties")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(PlayerWeekPenaltyDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddPenalty(
+        [FromRoute] int id,
+        [FromBody] AddPlayerPenaltyRequest request,
+        CancellationToken ct)
+    {
+        var week = await _repository.GetByIdAsync(id, ct);
+        if (week is null) return NotFound(new { error = $"Raid week {id} not found." });
+
+        var player = await _players.GetByIdAsync(request.PlayerId, ct);
+        if (player is null) return NotFound(new { error = $"Player {request.PlayerId} not found." });
+
+        var penaltyEvent = await _penalties.GetEventByIdAsync(request.PenaltyEventId, ct);
+        if (penaltyEvent is null)
+            return NotFound(new { error = $"Penalty event {request.PenaltyEventId} not found." });
+
+        var penalty = new PlayerWeekPenalty
+        {
+            PlayerId = request.PlayerId,
+            RaidWeekId = id,
+            PenaltyEventId = request.PenaltyEventId,
+            Note = request.Note?.Trim(),
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        var penaltyId = await _penalties.AddPlayerPenaltyAsync(penalty, ct);
+        var created = await _penalties.GetPenaltyByIdAsync(penaltyId, ct);
+        return Created($"api/raid-weeks/{id}/penalties", ToPenaltyDto(created!));
+    }
+
+    /// <summary>
+    /// Remove uma penalidade aplicada a um player nessa semana de raid.
+    /// </summary>
+    [HttpDelete("{id:int}/penalties/{penaltyId:int}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemovePenalty(
+        [FromRoute] int id,
+        [FromRoute] int penaltyId,
+        CancellationToken ct)
+    {
+        var penalty = await _penalties.GetPenaltyByIdAsync(penaltyId, ct);
+        if (penalty is null || penalty.RaidWeekId != id) return NotFound();
+
+        await _penalties.RemovePlayerPenaltyAsync(penaltyId, ct);
+        return NoContent();
+    }
+
     //Helpers
     private static RaidWeekDto ToDto(RaidWeek w) => new(
             w.Id,
@@ -202,6 +280,18 @@ public class RaidWeeksController(IRaidWeekRepository repository) : ControllerBas
             w.UpdatedAt,
             [.. w.ReportEntries.OrderBy(r => r.AddedAt).Select(r => r.ReportCode)]
         );
+
+    private static PlayerWeekPenaltyDto ToPenaltyDto(PlayerWeekPenalty p) => new(
+        p.Id,
+        p.PlayerId,
+        p.Player.Name,
+        p.RaidWeekId,
+        p.PenaltyEventId,
+        p.PenaltyEvent.Description,
+        p.PenaltyEvent.Points,
+        p.Note,
+        p.CreatedAt
+    );
 
     private static bool ValidateTuesdayRequest(
             DateTime input,

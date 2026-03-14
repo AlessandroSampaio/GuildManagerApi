@@ -21,6 +21,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
     public DbSet<RaidWeek> RaidWeeks => Set<RaidWeek>();
     public DbSet<RaidWeekReport> RaidWeekReports => Set<RaidWeekReport>();
+    public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
+    public DbSet<PlayerWeekPenalty> PlayerWeekPenalties => Set<PlayerWeekPenalty>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -384,6 +386,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
 
                 e.ToTable("raid_week_reports");
+            });
+
+        builder.Entity<PenaltyEvent>(e =>
+            {
+                e.HasKey(p => p.Id);
+                e.Property(p => p.Description).HasMaxLength(128).IsRequired();
+                e.ToTable("penalty_events");
+            });
+
+        builder.Entity<PlayerWeekPenalty>(e =>
+            {
+                e.HasKey(p => p.Id);
+                e.Property(p => p.Note).HasMaxLength(256);
+                e.HasIndex(p => new { p.RaidWeekId, p.PlayerId, p.PenaltyEventId });
+
+                e.HasOne(p => p.Player)
+                    .WithMany()
+                    .HasForeignKey(p => p.PlayerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(p => p.RaidWeek)
+                    .WithMany()
+                    .HasForeignKey(p => p.RaidWeekId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(p => p.PenaltyEvent)
+                    .WithMany(e => e.PlayerPenalties)
+                    .HasForeignKey(p => p.PenaltyEventId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.ToTable("player_week_penalties");
             });
     }
 }

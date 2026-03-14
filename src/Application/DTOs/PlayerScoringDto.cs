@@ -20,11 +20,14 @@ public record PlayerScoringResult(
 public record PlayerScoreDto(
     int PlayerId,
     string PlayerName,
+    int PerformancePoints,
+    int PenaltyPoints,
     int TotalPoints,
     float? AverageRankPercent,
     int ScoredEntries,
     int UnscoredEntries,
-    List<PlayerCharacterScoreDto> Characters
+    List<PlayerCharacterScoreDto> Characters,
+    List<PlayerWeekPenaltyDto> Penalties
 );
 
 public record PlayerCharacterScoreDto(
