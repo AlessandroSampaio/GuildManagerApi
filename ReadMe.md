@@ -1,8 +1,8 @@
 # WarcraftLogs Integration API
 
-> **Design Specification v1.1** · C# · .NET 10.0 · GraphQL · REST · EF Core
+> **Design Specification v2.0** · C# · .NET 10.0 · GraphQL · REST · EF Core
 
-API RESTful em **C# .NET 10.0** que atua como middleware entre o cliente e a API GraphQL do WarcraftLogs. Ela recebe um `reportCode`, consulta o WarcraftLogs, processa os dados e os persiste localmente — expondo endpoints para consulta de reports, personagens e guildas armazenados.
+API RESTful em **C# .NET 10.0** que atua como middleware entre o cliente e a API GraphQL do WarcraftLogs. Ela recebe um `reportCode`, consulta o WarcraftLogs, processa os dados e os persiste localmente — expondo endpoints para consulta de reports, personagens, guildas, players, semanas de raid e pontuação de performance.
 
 ---
 
@@ -15,12 +15,13 @@ API RESTful em **C# .NET 10.0** que atua como middleware entre o cliente e a API
 5. [Autenticação Local (JWT)](#5-autenticação-local-jwt)
 6. [Autenticação WarcraftLogs (OAuth 2.0)](#6-autenticação-warcraftlogs-oauth-20)
 7. [Workflow Completo](#7-workflow-completo)
-8. [Endpoints da API](#8-endpoints-da-api)
-9. [Schema do Banco de Dados](#9-schema-do-banco-de-dados)
-10. [Estrutura do Projeto](#10-estrutura-do-projeto)
-11. [Checklist de Implementação](#11-checklist-de-implementação)
-12. [Observações Importantes](#12-observações-importantes)
-13. [Próximos Passos](#13-próximos-passos)
+8. [Conceitos de Domínio](#8-conceitos-de-domínio)
+9. [Endpoints da API](#9-endpoints-da-api)
+10. [Schema do Banco de Dados](#10-schema-do-banco-de-dados)
+11. [Estrutura do Projeto](#11-estrutura-do-projeto)
+12. [Checklist de Implementação](#12-checklist-de-implementação)
+13. [Observações Importantes](#13-observações-importantes)
+14. [Próximos Passos](#14-próximos-passos)
 
 ---
 
@@ -63,6 +64,7 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 | **JWT Bearer** | Autenticação local da API |
 | **BCrypt.Net** | Hash de senhas |
 | **IMemoryCache** | Cache de nonces anti-CSRF para o fluxo OAuth |
+| **WebSockets** | Acompanhamento em tempo real do status de importação |
 | **Swagger / OpenAPI** | Documentação automática |
 | **Clean Architecture** | Domain · Application · Infrastructure · API |
 
@@ -270,8 +272,9 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 
 ```
 1.  POST /api/auth/register          → cria conta, obtém JWT
-2.  POST /api/reports/import/{code}  → importa via rota pública /api/v2/client
-3.  GET  /api/reports/{code}         → consulta dados armazenados
+2.  POST /api/Reports/import/{code}  → importa via rota pública /api/v2/client (202 Accepted)
+    ↳ conecte no wsUrl retornado para acompanhar o progresso em tempo real
+3.  GET  /api/Reports/{code}         → consulta dados armazenados
 ```
 
 ### 7.2 Primeiro uso (report privado)
@@ -281,34 +284,42 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 2.  GET  /api/wcl-auth/authorize            → obtém authorizeUrl
 3.  [browser] abre authorizeUrl             → usuário clica "Authorize" no WCL
 4.  [automático] GET /api/wcl-auth/callback → WCL redireciona, token é persistido
-5.  POST /api/reports/import/{code}         → importa via rota privada /api/v2/user
-6.  GET  /api/reports/{code}/performance    → consulta performance armazenada
+5.  POST /api/Reports/import/{code}         → importa via rota privada /api/v2/user
+6.  GET  /api/Reports/{code}/performance    → consulta performance armazenada
 ```
 
 ### 7.3 Uso recorrente (token WCL já autorizado)
 
 ```
 1.  POST /api/auth/login             → obtém JWT
-2.  POST /api/reports/import/{code}  → usa rota privada automaticamente
+2.  POST /api/Reports/import/{code}  → usa rota privada automaticamente
     ↳ se token WCL expirou           → renovação automática via refresh token (transparente)
     ↳ se refresh token inválido      → 401 com mensagem de re-autorização
 ```
 
-### 7.4 Verificar status da autorização WCL
+### 7.4 Calcular pontuação de uma semana de raid
+
+```
+1.  POST /api/raid-weeks                              → cria a semana (label + startsAt)
+2.  POST /api/raid-weeks/{id}/reports/{reportCode}    → associa reports à semana
+3.  POST /api/raid-weeks/{id}/penalties               → aplica penalidades a players (opcional)
+4.  POST /api/player-scoring/by-week/{raidWeekId}     → calcula pontuação da semana
+```
+
+### 7.5 Verificar status da autorização WCL
 
 ```bash
-# Checar se o usuário atual tem token WCL ativo
 GET /api/wcl-auth/status
 Authorization: Bearer <seu_jwt>
 
 # Resposta (autorizado):
-# { "userId": 1, "isAuthorized": true, "message": "WarcraftLogs access is active." }
+# { "userId": "...", "isAuthorized": true, "message": "WarcraftLogs access is active." }
 
 # Resposta (não autorizado):
-# { "userId": 1, "isAuthorized": false, "message": "Not authorized. Call GET /api/wcl-auth/authorize." }
+# { "userId": "...", "isAuthorized": false, "message": "Not authorized. Call GET /api/wcl-auth/authorize." }
 ```
 
-### 7.5 Revogar acesso WCL
+### 7.6 Revogar acesso WCL
 
 ```bash
 DELETE /api/wcl-auth/revoke
@@ -318,71 +329,214 @@ Authorization: Bearer <seu_jwt>
 
 ---
 
-## 8. Endpoints da API
+## 8. Conceitos de Domínio
 
-Todos os endpoints abaixo (exceto auth) exigem `Authorization: Bearer <jwt>`.
+### Player
+
+Representa um **jogador real** (pessoa), independente dos personagens que ele joga. Um player pode ter múltiplos characters vinculados. Isso permite rastrear a performance de um jogador mesmo quando ele troca de personagem.
+
+### Character
+
+Personagem do jogo importado do WarcraftLogs. Pertence a uma guilda e possui histórico de performance por fight.
+
+### RaidWeek
+
+Agrupa um conjunto de reports de uma **semana de raid** para facilitar o cálculo de pontuação semanal. Cada semana tem uma data de início (`startsAt`) e fim calculado automaticamente.
+
+### PenaltyEvent
+
+Evento de penalidade **reutilizável** com uma descrição e um valor fixo de pontos negativos. Exemplos: "Ausência não justificada (-20 pts)", "Morte evitável (-10 pts)". Cada evento pode ser aplicado a múltiplos players em diferentes semanas.
+
+### PlayerScoring
+
+Sistema de pontuação que converte o `rankPercent` WarcraftLogs em pontos inteiros via **tiers configuráveis** (ex: 95–100% = 100 pts, 75–94% = 75 pts). As configurações de tiers são gerenciadas pelo endpoint Admin. Penalidades da semana são descontadas do total de performance.
+
+---
+
+## 9. Endpoints da API
+
+Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer <jwt>`.
 
 ### Auth local
 
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
 | `POST` | `/api/auth/register` | ❌ | Registra novo usuário |
-| `POST` | `/api/auth/login` | ❌ | Login |
-| `POST` | `/api/auth/refresh` | ❌ | Renova access token |
-| `POST` | `/api/auth/logout` | ✅ | Revoga sessão atual |
-| `POST` | `/api/auth/logout-all` | ✅ | Revoga todas as sessões |
-| `PATCH` | `/api/auth/change-password` | ✅ | Altera senha |
-| `GET` | `/api/auth/me` | ✅ | Dados do usuário autenticado |
+| `POST` | `/api/auth/login` | ❌ | Login — retorna accessToken + refreshToken |
+| `POST` | `/api/auth/refresh` | ❌ | Renova access token via refresh token (rotation) |
+| `POST` | `/api/auth/logout` | ✅ | Revoga o refresh token da sessão atual |
+| `POST` | `/api/auth/logout-all` | ✅ | Revoga todos os refresh tokens do usuário |
+| `PATCH` | `/api/auth/change-password` | ✅ | Altera a senha e revoga todas as sessões ativas |
+| `GET` | `/api/auth/me` | ✅ | Retorna informações do usuário autenticado |
 
 ### WCL OAuth
 
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
-| `GET` | `/api/wcl-auth/authorize` | ✅ JWT | Inicia fluxo OAuth — retorna authorizeUrl |
-| `GET` | `/api/wcl-auth/callback` | ❌ | Callback do WCL — persiste token do usuário |
-| `GET` | `/api/wcl-auth/status` | ✅ JWT | Status da autorização WCL |
-| `DELETE` | `/api/wcl-auth/revoke` | ✅ JWT | Revoga token WCL do usuário |
+| `GET` | `/api/wcl-auth/authorize` | ✅ JWT | Inicia o fluxo OAuth — retorna a URL de autorização do WCL |
+| `GET` | `/api/wcl-auth/callback` | ❌ | Callback do WCL — valida state e persiste o token do usuário |
+| `GET` | `/api/wcl-auth/status` | ✅ JWT | Verifica se o usuário possui token WCL ativo |
+| `DELETE` | `/api/wcl-auth/revoke` | ✅ JWT | Revoga e remove o token WCL do usuário |
+
+### Admin
+
+> Requer role `Admin`.
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `PUT` | `/api/admin/wcl-credentials` | ✅ Admin | Configura as credenciais WCL da aplicação (clientId + clientSecret) |
+| `GET` | `/api/admin/wcl-credentials/status` | ✅ Admin | Retorna o status das credenciais WCL configuradas |
+| `GET` | `/api/admin/scoring-settings` | ✅ Admin | Retorna as configurações de pontuação por tiers |
+| `PUT` | `/api/admin/scoring-settings` | ✅ Admin | Atualiza as configurações de tiers de pontuação |
+| `DELETE` | `/api/admin/scoring-settings` | ✅ Admin | Remove as configurações de pontuação |
+| `GET` | `/api/admin/scoring-settings/calculate` | ✅ Admin | Simula o cálculo de pontos para um `rankPercent` informado (query param) |
+
+#### Exemplo — configurar tiers de pontuação
+
+```json
+// PUT /api/admin/scoring-settings
+{
+  "tiers": [
+    { "minPercent": 95, "maxPercent": 100, "points": 100, "label": "Mythic" },
+    { "minPercent": 75, "maxPercent": 94,  "points": 75,  "label": "Heroic" },
+    { "minPercent": 50, "maxPercent": 74,  "points": 50,  "label": "Normal" },
+    { "minPercent": 0,  "maxPercent": 49,  "points": 25,  "label": "Below Average" }
+  ]
+}
+```
 
 ### Reports
 
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
-| `POST` | `/api/reports/import/{code}` | ✅ | Importa report (público ou privado automaticamente) |
-| `GET` | `/api/reports` | ✅ | Lista reports paginados |
-| `GET` | `/api/reports/{code}` | ✅ | Detalhes de um report |
-| `GET` | `/api/reports/{code}/performance` | ✅ | Performance por fight (DPS/HPS/Tank) |
+| `POST` | `/api/Reports/import/{reportCode}` | ✅ | Inicia importação assíncrona do report — retorna `202 Accepted` com wsUrl |
+| `GET` | `/api/Reports/{reportCode}/ws` | ✅ (query param) | WebSocket para acompanhar o progresso da importação em tempo real |
+| `GET` | `/api/Reports` | ✅ | Lista reports paginados |
+| `GET` | `/api/Reports/{reportCode}` | ✅ | Retorna dados completos de um report específico |
+| `GET` | `/api/Reports/{reportCode}/performance` | ✅ | Retorna dados de performance por fight (DPS/HPS/Tank) |
+
+#### Resposta de importação (`POST /api/Reports/import/{reportCode}`)
+
+```json
+{
+  "reportCode": "aAbBcCdDeE",
+  "status": "Queued",
+  "wsUrl": "wss://localhost:5001/api/Reports/aAbBcCdDeE/ws",
+  "message": "Import started. Connect to wsUrl to follow progress."
+}
+```
+
+> O token JWT deve ser passado via query param `?access_token=<jwt>` ao conectar no WebSocket.
 
 ### Characters
 
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
-| `GET` | `/api/characters/{id}` | ✅ | Personagem com histórico de performance |
+| `GET` | `/api/characters/{id}` | ✅ | Retorna detalhes de um personagem com histórico de performance |
+| `GET` | `/api/characters/search` | ✅ | Busca characters por nome (substring) e/ou classe, paginado. Retorna o player vinculado se houver |
+
+#### Parâmetros de `/api/characters/search`
+
+| Param | Tipo | Descrição |
+|-------|------|-----------|
+| `q` | string | Substring do nome do personagem |
+| `className` | string | Classe (ex: `Mage`, `Druid`) |
+| `page` | int | Página (default: 1) |
+| `pageSize` | int | Itens por página (default: 20) |
 
 ### Guilds
 
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
-| `GET` | `/api/guilds/{id}` | ✅ | Dados de uma guilda |
-| `GET` | `/api/guilds/{id}/reports` | ✅ | Reports de uma guilda (paginado) |
-| `GET` | `/api/guilds/{id}/characters` | ✅ | Personagens de uma guilda |
+| `GET` | `/api/guilds` | ✅ | Lista todas as guildas paginado |
+| `GET` | `/api/guilds/{id}` | ✅ | Retorna dados de uma guilda específica |
+| `GET` | `/api/guilds/{id}/reports` | ✅ | Lista reports de uma guilda (paginado) |
+| `GET` | `/api/guilds/{id}/characters` | ✅ | Lista personagens de uma guilda |
+| `GET` | `/api/guilds/{id}/roster` | ✅ | Retorna o roster da guilda com vínculo ao player (se houver) |
 
-#### Resposta de importação (`POST /api/reports/import/{code}`)
+### Players
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/players` | ✅ | Lista players paginado |
+| `POST` | `/api/players` | ✅ | Cria um novo player |
+| `GET` | `/api/players/{id}` | ✅ | Retorna detalhes de um player com seus characters vinculados |
+| `PUT` | `/api/players/{id}` | ✅ | Atualiza o nome de um player |
+| `DELETE` | `/api/players/{id}` | ✅ | Remove um player |
+| `POST` | `/api/players/{id}/characters/{characterId}` | ✅ | Vincula um character a um player |
+| `DELETE` | `/api/players/{id}/characters/{characterId}` | ✅ | Desvincula um character de um player |
+
+### PenaltyEvents
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/penalty-events` | ✅ | Lista todos os eventos de penalidade disponíveis |
+| `POST` | `/api/penalty-events` | ✅ | Cria um novo evento de penalidade (descrição + pontos) |
+| `GET` | `/api/penalty-events/{id}` | ✅ | Retorna detalhes de um evento de penalidade |
+| `PUT` | `/api/penalty-events/{id}` | ✅ | Atualiza descrição e/ou pontos de um evento de penalidade |
+| `DELETE` | `/api/penalty-events/{id}` | ✅ | Remove um evento de penalidade |
+
+### RaidWeeks
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/raid-weeks` | ✅ | Lista semanas de raid paginado |
+| `POST` | `/api/raid-weeks` | ✅ | Cria uma nova semana de raid (label, startsAt, reportCodes opcionais) |
+| `GET` | `/api/raid-weeks/{id}` | ✅ | Retorna detalhes de uma semana de raid com seus report codes |
+| `PUT` | `/api/raid-weeks/{id}` | ✅ | Atualiza label e/ou data de início de uma semana |
+| `DELETE` | `/api/raid-weeks/{id}` | ✅ | Remove uma semana de raid |
+| `GET` | `/api/raid-weeks/by-date` | ✅ | Busca a semana de raid que contém uma data específica (query param `date`) |
+| `POST` | `/api/raid-weeks/{id}/reports/{reportCode}` | ✅ | Associa um report a uma semana de raid |
+| `DELETE` | `/api/raid-weeks/{id}/reports/{reportCode}` | ✅ | Remove a associação de um report com uma semana |
+| `GET` | `/api/raid-weeks/{id}/penalties` | ✅ | Lista todas as penalidades aplicadas a players nessa semana |
+| `POST` | `/api/raid-weeks/{id}/penalties` | ✅ | Aplica uma penalidade a um player na semana informada |
+| `DELETE` | `/api/raid-weeks/{id}/penalties/{penaltyId}` | ✅ | Remove uma penalidade aplicada a um player nessa semana |
+
+### PlayerScoring
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `POST` | `/api/player-scoring` | ✅ | Calcula a pontuação de performance dos players para uma lista de report codes informada |
+| `POST` | `/api/player-scoring/by-week/{raidWeekId}` | ✅ | Calcula a pontuação de todos os players para todos os reports de uma RaidWeek registrada. Inclui penalidades da semana no resultado |
+
+#### Exemplo — calcular por lista de reports
+
+```json
+// POST /api/player-scoring
+{
+  "reportCodes": ["aAbBcC1234", "xXyYzZ5678"]
+}
+```
+
+#### Exemplo — resposta de pontuação
 
 ```json
 {
-  "reportCode": "aAbBcCdDeE",
-  "title": "Nome do Report",
-  "fightsImported": 12,
-  "killsImported": 5,
-  "playersImported": 20,
-  "performanceEntriesSaved": 100,
-  "guildName": "Nome da Guilda"
+  "players": [
+    {
+      "playerId": 1,
+      "playerName": "Fulano",
+      "performancePoints": 175,
+      "penaltyPoints": -20,
+      "totalPoints": 155,
+      "averageRankPercent": 87.3,
+      "scoredEntries": 8,
+      "unscoredEntries": 1,
+      "characters": [...],
+      "penalties": [...]
+    }
+  ],
+  "reports": [...],
+  "scoringSettings": { "tiers": [...] },
+  "raidWeek": { "id": 5, "label": "Semana 1", "startsAt": "...", "endsAt": "..." },
+  "totalEntriesEvaluated": 40,
+  "entriesWithoutRankPercent": 3
 }
 ```
 
 ---
 
-## 9. Schema do Banco de Dados
+## 10. Schema do Banco de Dados
 
 ### `Reports` — Tabela principal
 
@@ -467,7 +621,7 @@ Todos os endpoints abaixo (exceto auth) exigem `Authorization: Bearer <jwt>`.
 | `CreatedAt` | `DateTime` | | Criação |
 | `IsRevoked` | `bool` | | Token revogado |
 
-### `WclUserTokens` — Tokens OAuth WCL por usuário ⭐ novo
+### `WclUserTokens` — Tokens OAuth WCL por usuário
 
 | Coluna | Tipo | Flag | Descrição |
 |--------|------|------|-----------|
@@ -479,9 +633,53 @@ Todos os endpoints abaixo (exceto auth) exigem `Authorization: Bearer <jwt>`.
 | `CreatedAt` | `DateTime` | | Primeira autorização |
 | `LastRefreshedAt` | `DateTime?` | | Última renovação automática |
 
+### `Players` — Jogadores reais
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Auto-increment |
+| `Name` | `string` | | Nome do jogador |
+| `CreatedAt` | `DateTime` | | Data de criação |
+| `UpdatedAt` | `DateTime` | | Última atualização |
+
+### `RaidWeeks` — Semanas de raid
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Auto-increment |
+| `Label` | `string` | | Identificador amigável (ex: "Semana 1") |
+| `StartsAt` | `DateTime` | | Início da semana |
+| `EndsAt` | `DateTime` | | Fim da semana (calculado) |
+| `CreatedAt` | `DateTime` | | Data de criação |
+| `UpdatedAt` | `DateTime` | | Última atualização |
+
+### `PenaltyEvents` — Tipos de penalidade
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Auto-increment |
+| `Description` | `string` | | Descrição do evento |
+| `Points` | `int` | | Pontos negativos aplicados |
+| `CreatedAt` | `DateTime` | | Data de criação |
+
+### `PlayerWeekPenalties` — Penalidades aplicadas por semana
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Auto-increment |
+| `PlayerId` | `int` | FK | Player penalizado |
+| `RaidWeekId` | `int` | FK | Semana de raid |
+| `PenaltyEventId` | `int` | FK | Tipo de penalidade |
+| `Note` | `string?` | | Observação opcional |
+| `CreatedAt` | `DateTime` | | Data de aplicação |
+
+### `ScoringSettings` / `ScoringTiers` — Configurações de pontuação
+
+Tabelas que definem os tiers de conversão de `rankPercent` → pontos, gerenciadas via `/api/admin/scoring-settings`.
+
 ---
 
-## 10. Estrutura do Projeto
+## 11. Estrutura do Projeto
 
 ```
 WarcraftLogsApi/
@@ -495,6 +693,11 @@ WarcraftLogsApi/
 │   │   │   ├── Character.cs
 │   │   │   ├── Guild.cs
 │   │   │   ├── PerformanceEntry.cs
+│   │   │   ├── Player.cs
+│   │   │   ├── RaidWeek.cs
+│   │   │   ├── PenaltyEvent.cs
+│   │   │   ├── PlayerWeekPenalty.cs
+│   │   │   ├── ScoringSettings.cs
 │   │   │   └── AppUser.cs          # AppUser + RefreshToken + WclUserToken
 │   │   └── Interfaces/
 │   │       ├── IRepositories.cs
@@ -507,17 +710,19 @@ WarcraftLogsApi/
 │   │   ├── DTOs/
 │   │   │   ├── Dtos.cs
 │   │   │   ├── AuthDtos.cs
-│   │   │   └── WclAuthDtos.cs      # DTOs do fluxo OAuth WCL
+│   │   │   └── WclAuthDtos.cs
 │   │   ├── GraphQL/
 │   │   │   └── WclGraphQLClient.cs # Resolução automática público/privado
 │   │   └── Services/
-│   │       └── ImportReportService.cs
+│   │       ├── ImportReportService.cs
+│   │       ├── PlayerScoringService.cs
+│   │       └── RaidWeekService.cs
 │   │
 │   ├── WarcraftLogsApi.Infrastructure/
 │   │   ├── Auth/
 │   │   │   └── WclTokenService.cs  # Client Credentials + Authorization Code
 │   │   ├── Data/
-│   │   │   └── AppDbContext.cs     # Inclui WclUserTokens
+│   │   │   └── AppDbContext.cs
 │   │   └── Repositories/
 │   │       ├── Repositories.cs
 │   │       └── UserRepository.cs
@@ -525,9 +730,15 @@ WarcraftLogsApi/
 │   └── WarcraftLogsApi.API/
 │       ├── Controllers/
 │       │   ├── AuthController.cs
-│       │   ├── WclAuthController.cs  # Fluxo OAuth WCL (authorize/callback/status/revoke)
+│       │   ├── WclAuthController.cs
+│       │   ├── AdminController.cs
 │       │   ├── ReportsController.cs
-│       │   ├── CharactersGuildsControllers.cs
+│       │   ├── CharactersController.cs
+│       │   ├── GuildsController.cs
+│       │   ├── PlayersController.cs
+│       │   ├── PenaltyEventsController.cs
+│       │   ├── RaidWeeksController.cs
+│       │   └── PlayerScoringController.cs
 │       ├── Middleware/
 │       │   └── GlobalExceptionMiddleware.cs
 │       ├── appsettings.json
@@ -540,7 +751,7 @@ WarcraftLogsApi/
 
 ---
 
-## 11. Checklist de Implementação
+## 12. Checklist de Implementação
 
 ### Fase 1 — Fundação
 - [x] Criar solução .NET 10 com 4 projetos (Domain, Application, Infrastructure, API)
@@ -553,27 +764,36 @@ WarcraftLogsApi/
 - [x] Implementar renovação automática via refresh token
 - [x] Implementar `WclGraphQLClient` com resolução automática público/privado
 
-### Fase 3 — Negócio
-- [x] Implementar `ImportReportService` passando `userId` para o client
+### Fase 3 — Negócio core
+- [x] Implementar `ImportReportService` (assíncrono com WebSocket)
 - [x] Implementar repositories EF Core para todas as entidades
 
-### Fase 4 — API
+### Fase 4 — API Auth & Reports
 - [x] Implementar `AuthController` (JWT local)
 - [x] Implementar `WclAuthController` (authorize / callback / status / revoke)
-- [x] Implementar `ReportsController` extraindo `userId` do JWT
+- [x] Implementar `ReportsController` com import assíncrono e WebSocket
 - [x] Implementar `CharactersController` e `GuildsController`
 - [x] Configurar Swagger com suporte a Bearer token
 - [x] Registrar `IMemoryCache` para estado anti-CSRF OAuth
 - [x] Tratamento de erros global (ProblemDetails)
 
-### Fase 5 — Qualidade
+### Fase 5 — Novos domínios
+- [x] Implementar `PlayersController` (CRUD + vincular/desvincular characters)
+- [x] Implementar `PenaltyEventsController` (CRUD)
+- [x] Implementar `RaidWeeksController` (CRUD + reports + penalties)
+- [x] Implementar `PlayerScoringController` (por report codes e por raid week)
+- [x] Implementar `AdminController` (credenciais WCL + scoring settings)
+- [x] Implementar `PlayerScoringService` com conversão rankPercent → pontos por tiers
+
+### Fase 6 — Qualidade
+- [ ] Testes unitários para `PlayerScoringService`
 - [ ] Testes unitários para `ImportReportService`
 - [ ] Testes de integração para o fluxo OAuth WCL
 - [ ] Documentar variáveis de ambiente
 
 ---
 
-## 12. Observações Importantes
+## 13. Observações Importantes
 
 - O `reportCode` no WarcraftLogs é **alfanumérico** (ex: `"aAbBcCdDeE"`), nunca numérico
 - A resolução entre rota pública e privada é **automática e transparente** — baseada na existência de token WCL vinculado ao usuário autenticado via JWT
@@ -584,20 +804,18 @@ WarcraftLogsApi/
 - A importação é **idempotente** — re-importar o mesmo report atualiza os dados existentes
 - O `RedirectUri` configurado no `appsettings.json` deve ser idêntico ao registrado no painel do WarcraftLogs
 - O `GlobalExceptionMiddleware` retorna respostas no formato **ProblemDetails** (RFC 7807)
+- O token JWT deve ser passado via query param `?access_token=<jwt>` ao conectar no endpoint WebSocket `/api/Reports/{code}/ws`
 
 ---
 
-## 13. Próximos Passos
+## 14. Próximos Passos
 
 - [ ] Background job para re-sincronizar reports periodicamente (Hangfire ou Worker Service)
 - [ ] Cache Redis para responses frequentes de consulta
 - [ ] Rate limiting para evitar abusos da cota da API WCL
-- [ ] Endpoint de ranking comparativo entre membros de uma guilda
-- [ ] Suporte a múltiplas métricas de performance (HPS, DTPS, além de DPS)
-- [ ] Webhook / notificação ao importar novo report
-- [ ] Painel administrativo para gestão de usuários (`Role: Admin`)
 - [ ] Persistência do `state` OAuth em banco/Redis para ambientes com múltiplas instâncias
+- [ ] Testes de carga no endpoint de scoring com grandes volumes de reports
 
 ---
 
-*GuildManager API · Design Spec v1.2 · .NET 10 · PostgreSQL*
+*GuildManager API · Design Spec v2.0 · .NET 10 · PostgreSQL*
