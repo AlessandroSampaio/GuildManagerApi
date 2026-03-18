@@ -24,7 +24,7 @@ public interface IJwtService
     string GenerateAccessToken(AppUser user);
     string GenerateRefreshToken();
     ClaimsPrincipal? ValidateToken(string token);
-    int? GetUserIdFromToken(string token);
+    Guid? GetUserIdFromToken(string token);
 }
 
 public class JwtService(IOptions<JwtOptions> opts) : IJwtService
@@ -64,11 +64,11 @@ public class JwtService(IOptions<JwtOptions> opts) : IJwtService
         return Convert.ToBase64String(bytes);
     }
 
-    public int? GetUserIdFromToken(string token)
+    public Guid? GetUserIdFromToken(string token)
     {
         var principal = ValidateToken(token);
         var sub = principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return int.TryParse(sub, out var id) ? id : null;
+        return Guid.TryParse(sub, out var id) ? id : null;
     }
 
     public ClaimsPrincipal? ValidateToken(string token)
