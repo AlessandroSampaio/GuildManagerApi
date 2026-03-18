@@ -1,4 +1,5 @@
 using System.Text;
+using AspNetCoreRateLimit;
 using GuildManagerApi.Api.Middleware;
 using GuildManagerApi.Application.Auth;
 using GuildManagerApi.Application.GraphQL;
@@ -9,6 +10,7 @@ using GuildManagerApi.Infrastructure.Data;
 using GuildManagerApi.Infrastructure.Encryption;
 using GuildManagerApi.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -27,6 +29,19 @@ builder.Services.Configure<JwtOptions>(
 builder.Services.Configure<EncryptionOptions>(
     builder.Configuration.GetSection(EncryptionOptions.Section));
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+builder.Services.Configure<IpRateLimitOptions>(
+    builder.Configuration.GetSection("IpRateLimiting"));
+
+builder.Services.Configure<ClientRateLimitOptions>(
+    builder.Configuration.GetSection("ClientRateLimiting"));
 
 // Context
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(
@@ -34,6 +49,12 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(
     npsql => npsql.EnableRetryOnFailure(3)
         .MigrationsAssembly("GuildManagerApi.Api")
 ));
+
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "GuildManagerApi:RateLimit:";
+});
 
 // JWT Authentication
 var jwtSection = builder.Configuration.GetSection(JwtOptions.Section);
@@ -118,6 +139,17 @@ builder.Services.AddHostedService<ImportWorker>();
 // API
 // In-memory cache for OAuth state nonces (anti-CSRF)
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
+
+//Rate Limiting
+builder.Services.AddSingleton<IIpPolicyStore, DistributedCacheIpPolicyStore>();
+builder.Services.AddSingleton<IClientPolicyStore, DistributedCacheClientPolicyStore>();
+builder.Services.AddSingleton<IRateLimitCounterStore,
+    DistributedCacheRateLimitCounterStore>();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+
+
 
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>

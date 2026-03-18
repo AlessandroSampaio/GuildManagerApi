@@ -14,24 +14,19 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Domain\GuildManagerApi.Domain.csproj" />
-      <ProjectReference
-            Include="..\Application\GuildManagerApi.Application.csproj"
-        />
-      <ProjectReference
-            Include="..\Infrastructure\GuildManagerApi.Infrastructure.csproj"
-        />
+      <ProjectReference Include="..\Application\GuildManagerApi.Application.csproj" />
+      <ProjectReference Include="..\Infrastructure\GuildManagerApi.Infrastructure.csproj" />
     </ItemGroup>
 
     <ItemGroup>
       <!-- EF Core CLI tools for running migrations from the API project -->
-      <PackageReference
-            Include="Microsoft.EntityFrameworkCore.Design"
-            Version="10.0.3"
-        >
-        <IncludeAssets
-            >runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PackageReference Include="AspNetCoreRateLimit" Version="5.0.0" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         <PrivateAssets>all</PrivateAssets>
       </PackageReference>
+      <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.5" />
+      <PackageReference Include="StackExchange.Redis" Version="2.12.1" />
 
       <!-- Swagger / OpenAPI -->
       <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4" />
