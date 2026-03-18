@@ -183,18 +183,27 @@ builder.Services.AddSwaggerGen(c =>
 // Configure CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
+    options.AddPolicy("TauriClients", policy =>
+        {
+            policy
+                .WithOrigins(
+                    "tauri://localhost",
+                    "https://tauri.localhost",
+                    "http://tauri.localhost")
+                .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH")
+                .WithHeaders("Authorization", "Content-Type", "X-Requested-With")
+                .AllowCredentials();
+        });
 });
 
 // Build
 var app = builder.Build();
 
-app.UseCors(MyAllowSpecificOrigins);
+app.UseForwardedHeaders();
+app.UseIpRateLimiting();
+app.UseMiddleware<ClientIdInjectionMiddleware>();
+app.UseClientRateLimiting();
+app.UseCors("TauriClients");
 
 // Auto-run migrations on startup
 using var scope = app.Services.CreateScope();
