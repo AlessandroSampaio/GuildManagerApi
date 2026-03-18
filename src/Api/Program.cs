@@ -15,8 +15,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
-var MyAllowSpecificOrigins = "AllowAll";
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Configuration
