@@ -1,3 +1,4 @@
+
 using System.Text;
 using AspNetCoreRateLimit;
 using GuildManagerApi.Api.Middleware;
@@ -186,6 +187,7 @@ builder.Services.AddCors(options =>
         {
             policy
                 .WithOrigins(
+		    "http://localhost:1420",
                     "tauri://localhost",
                     "https://tauri.localhost",
                     "http://tauri.localhost")
