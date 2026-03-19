@@ -40,10 +40,20 @@ public record WclPlayerRanking(
     int TotalParses
 );
 
+// Guild members response models
+public record WclGuildMembersResponse(WclGuildMembersData GuildData);
+public record WclGuildMembersData(WclGuildWithMembers Guild);
+public record WclGuildWithMembers(int Id, string Name, WclMemberList Members);
+public record WclMemberList(List<WclGuildMember> Data);
+public record WclGuildMember(long Id, string Name, int ClassId, WclGuildMemberServer? Server);
+public record WclGuildMemberServer(string Name, WclGuildMemberRegion? Region);
+public record WclGuildMemberRegion(string Name);
+
 public interface IWclGraphQLClient
 {
     Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default);
     Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, CancellationToken ct = default);
+    Task<List<WclGuildMember>> GetGuildMembersAsync(string guildName, string serverSlug, string serverRegion, Guid? userId = null, CancellationToken ct = default);
 }
 
 public partial class WclGraphQLClient(
@@ -129,6 +139,36 @@ public partial class WclGraphQLClient(
         }
 
         return results;
+    }
+
+    public async Task<List<WclGuildMember>> GetGuildMembersAsync(
+        string guildName, string serverSlug, string serverRegion,
+        Guid? userId = null, CancellationToken ct = default)
+    {
+        const string query = """
+            query GetGuildMembers($guildName: String!, $serverSlug: String!, $serverRegion: String!) {
+              guildData {
+                guild(name: $guildName, serverSlug: $serverSlug, serverRegion: $serverRegion) {
+                  id
+                  members {
+                    data {
+                      id
+                      name
+                      classID
+                      server { name region { name } }
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        var response = await ExecuteQueryAsync<WclGuildMembersResponse>(
+            query,
+            new { guildName, serverSlug, serverRegion },
+            userId, ct);
+
+        return response.GuildData.Guild.Members.Data;
     }
 
     private async Task<(string endpoint, string token)> ResolveEndpointAndTokenAsync(

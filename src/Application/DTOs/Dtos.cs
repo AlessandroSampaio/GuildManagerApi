@@ -110,6 +110,9 @@ public record PerformanceSummaryDto(
     float? RankPercent
 );
 
+// Guild sync
+public record GuildSyncResultDto(int GuildId, string GuildName, int CharactersSynced);
+
 // Pagination
 public record PagedResult<T>(
     List<T> Data,

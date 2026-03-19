@@ -1,8 +1,10 @@
 
 using GuildManagerApi.Application.DTOs;
+using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GuildManagerApi.Api.Controllers;
 
@@ -10,10 +12,11 @@ namespace GuildManagerApi.Api.Controllers;
 [Route("api/guilds")]
 [Produces("application/json")]
 [Authorize]
-public class GuildsController(IGuildRepository guilds, ICharacterRepository characters) : ControllerBase
+public class GuildsController(IGuildRepository guilds, ICharacterRepository characters, IGuildSyncService guildSync) : ControllerBase
 {
     private readonly IGuildRepository _guilds = guilds;
     private readonly ICharacterRepository _characters = characters;
+    private readonly IGuildSyncService _guildSync = guildSync;
 
 
     [HttpGet("{id:int}")]
@@ -108,5 +111,28 @@ public class GuildsController(IGuildRepository guilds, ICharacterRepository char
         ));
 
         return Ok(dtos);
+    }
+
+    [HttpPost("{id:int}/sync-characters")]
+    [ProducesResponseType(typeof(GuildSyncResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SyncCharacters([FromRoute] int id, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        try
+        {
+            var result = await _guildSync.SyncCharactersAsync(id, userId, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    private Guid? GetUserId()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(sub, out var id) ? id : null;
     }
 }
