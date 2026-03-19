@@ -42,9 +42,9 @@ public record WclPlayerRanking(
 
 // Guild members response models
 public record WclGuildMembersResponse(WclGuildMembersData GuildData);
-public record WclGuildMembersData(WclGuildWithMembers Guild);
-public record WclGuildWithMembers(int Id, string Name, WclMemberList Members);
-public record WclMemberList(List<WclGuildMember> Data);
+public record WclGuildMembersData(WclGuildWithMembers? Guild);
+public record WclGuildWithMembers(int Id, string Name, WclMemberList? Members);
+public record WclMemberList(List<WclGuildMember>? Data);
 public record WclGuildMember(long Id, string Name, int ClassId, WclGuildMemberServer? Server);
 public record WclGuildMemberServer(string Name, WclGuildMemberRegion? Region);
 public record WclGuildMemberRegion(string Name);
@@ -141,10 +141,24 @@ public partial class WclGraphQLClient(
         return results;
     }
 
+    private static readonly Dictionary<string, string> _regionAcronyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "United States", "US" },
+        { "Europe",        "EU" },
+        { "Korea",         "KR" },
+        { "Taiwan",        "TW" },
+        { "China",         "CN" },
+    };
+
+    private static string NormalizeRegion(string region)
+        => _regionAcronyms.TryGetValue(region.Trim(), out var acronym) ? acronym : region.Trim();
+
     public async Task<List<WclGuildMember>> GetGuildMembersAsync(
         string guildName, string serverSlug, string serverRegion,
         Guid? userId = null, CancellationToken ct = default)
     {
+        var regionCode = NormalizeRegion(serverRegion);
+        Console.WriteLine($"Fetching guild members for guild {guildName}, server {serverSlug}, region {regionCode}");
         const string query = """
             query GetGuildMembers($guildName: String!, $serverSlug: String!, $serverRegion: String!) {
               guildData {
@@ -162,13 +176,16 @@ public partial class WclGraphQLClient(
               }
             }
             """;
-
         var response = await ExecuteQueryAsync<WclGuildMembersResponse>(
             query,
-            new { guildName, serverSlug, serverRegion },
+            new { guildName, serverSlug, serverRegion = regionCode },
             userId, ct);
 
-        return response.GuildData.Guild.Members.Data;
+        if (response.GuildData.Guild is null)
+            throw new KeyNotFoundException(
+                $"Guild \"{guildName}\" não encontrada no WarcraftLogs para o servidor \"{serverSlug}\" ({regionCode}).");
+
+        return response.GuildData.Guild.Members?.Data ?? [];
     }
 
     private async Task<(string endpoint, string token)> ResolveEndpointAndTokenAsync(
@@ -200,6 +217,7 @@ public partial class WclGraphQLClient(
 
         var json = await response.Content.ReadAsStringAsync(ct);
         LogWclResponse(json[..Math.Min(json.Length, 200)]);
+        Console.WriteLine(json);
 
         var doc = JsonSerializer.Deserialize<JsonElement>(json);
 

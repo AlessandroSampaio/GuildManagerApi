@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xargs grep:*)",
       "Bash(xargs wc:*)",
-      "WebFetch(domain:www.warcraftlogs.com)"
+      "WebFetch(domain:www.warcraftlogs.com)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

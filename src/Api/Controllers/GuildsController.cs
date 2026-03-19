@@ -124,9 +124,9 @@ public class GuildsController(IGuildRepository guilds, ICharacterRepository char
             var result = await _guildSync.SyncCharactersAsync(id, userId, ct);
             return Ok(result);
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException ex)
         {
-            return NotFound();
+            return NotFound(new { message = ex.Message });
         }
     }
 
