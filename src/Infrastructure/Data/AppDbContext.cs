@@ -30,8 +30,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Class>(e =>
             {
                 e.HasKey(c => c.Id);
-                e.Property(c => c.Name).HasMaxLength(20).IsRequired();
-                e.Property(c => c.SlugName).HasMaxLength(20);
+                e.Property(c => c.Id).HasColumnName("id");
+                e.Property(c => c.Name).HasColumnName("name").HasMaxLength(20).IsRequired();
+                e.Property(c => c.SlugName).HasColumnName("slug_name").HasMaxLength(20);
                 e.ToTable("classes");
             });
 
@@ -126,8 +127,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Specialization>(e =>
             {
                 e.HasKey(c => new { c.Id, c.ClassId });
-                e.Property(c => c.Name).HasMaxLength(20).IsRequired();
-                e.Property(c => c.SlugName).HasMaxLength(20);
+                e.Property(c => c.Id).HasColumnName("id");
+                e.Property(c => c.ClassId).HasColumnName("class_id");
+                e.Property(c => c.Name).HasColumnName("name").HasMaxLength(20).IsRequired();
+                e.Property(c => c.SlugName).HasColumnName("slug_name").HasMaxLength(20);
                 e.HasIndex(c => c.ClassId);
 
                 e.HasOne(c => c.Class)
@@ -183,12 +186,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Report>(e =>
             {
                 e.HasKey(r => r.Id);
-                e.Property(r => r.Id).HasMaxLength(16);
-                e.Property(r => r.Title).HasMaxLength(256).IsRequired();
+                e.Property(r => r.Id).HasColumnName("id").HasMaxLength(16);
+                e.Property(r => r.Title).HasColumnName("title").HasMaxLength(256).IsRequired();
                 e.Property(r => r.ImportStatus)
+                             .HasColumnName("import_status")
                              .HasConversion<int>()
                              .HasDefaultValue(ImportStatus.Queued);
-                e.Property(r => r.ImportError).HasMaxLength(512);
+                e.Property(r => r.ImportError).HasColumnName("import_error").HasMaxLength(512);
+                e.Property(r => r.GuildId).HasColumnName("guild_id");
+                e.Property(r => r.StartTime).HasColumnName("start_time");
                 e.HasIndex(r => r.GuildId);
                 e.HasIndex(r => r.StartTime);
                 e.HasIndex(r => r.ImportStatus);
@@ -204,7 +210,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Fight>(e =>
             {
                 e.HasKey(f => f.Id);
-                e.Property(f => f.Name).HasMaxLength(128).IsRequired();
+                e.Property(f => f.Id).HasColumnName("id");
+                e.Property(f => f.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+                e.Property(f => f.ReportId).HasColumnName("report_id");
+                e.Property(f => f.FightIndex).HasColumnName("fight_index");
                 e.HasIndex(f => f.ReportId);
                 e.HasIndex(f => new { f.ReportId, f.FightIndex }).IsUnique();
 
@@ -219,9 +228,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Character>(e =>
             {
                 e.HasKey(c => c.Id);
-                e.Property(c => c.Name).HasMaxLength(64).IsRequired();
-                e.Property(c => c.Server).HasMaxLength(64);
-                e.Property(c => c.Region).HasMaxLength(20);
+                e.Property(c => c.Id).HasColumnName("id");
+                e.Property(c => c.Name).HasColumnName("name").HasMaxLength(64).IsRequired();
+                e.Property(c => c.Server).HasColumnName("server").HasMaxLength(64);
+                e.Property(c => c.Region).HasColumnName("region").HasMaxLength(20);
+                e.Property(c => c.ClassId).HasColumnName("class_id");
+                e.Property(c => c.WclActorId).HasColumnName("wcl_actor_id");
+                e.Property(c => c.GuildId).HasColumnName("guild_id");
+                e.Property(c => c.PlayerId).HasColumnName("player_id");
                 e.HasIndex(c => c.ClassId);
                 e.HasIndex(c => new { c.WclActorId, c.Server }).IsUnique();
                 e.HasIndex(c => c.GuildId);
@@ -248,8 +262,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Guild>(e =>
             {
                 e.HasKey(g => g.Id);
-                e.Property(g => g.Name).HasMaxLength(64).IsRequired();
-                e.Property(g => g.Region).HasMaxLength(20);
+                e.Property(g => g.Id).HasColumnName("id");
+                e.Property(g => g.Name).HasColumnName("name").HasMaxLength(64).IsRequired();
+                e.Property(g => g.Region).HasColumnName("region").HasMaxLength(20);
                 e.HasIndex(g => g.Region);
                 e.HasIndex(g => g.Name);
 
@@ -259,10 +274,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<AppUser>(e =>
             {
                 e.HasKey(u => u.Id);
-                e.Property(u => u.Username).HasMaxLength(32).IsRequired();
-                e.Property(u => u.Email).HasMaxLength(128).IsRequired();
-                e.Property(u => u.PasswordHash).IsRequired();
+                e.Property(u => u.Id).HasColumnName("id");
+                e.Property(u => u.Username).HasColumnName("username").HasMaxLength(32).IsRequired();
+                e.Property(u => u.Email).HasColumnName("email").HasMaxLength(128).IsRequired();
+                e.Property(u => u.PasswordHash).HasColumnName("password_hash").IsRequired();
                 e.Property(u => u.Role)
+                    .HasColumnName("role")
                     .HasConversion<string>()
                     .HasMaxLength(16)
                     .IsRequired();
@@ -275,7 +292,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<RefreshToken>(e =>
             {
                 e.HasKey(t => t.Id);
-                e.Property(t => t.Token).HasMaxLength(128).IsRequired();
+                e.Property(t => t.Id).HasColumnName("id");
+                e.Property(t => t.Token).HasColumnName("token").HasMaxLength(128).IsRequired();
+                e.Property(t => t.UserId).HasColumnName("user_id");
                 e.HasIndex(t => t.Token).IsUnique();
                 e.HasIndex(t => t.UserId);
 
@@ -289,8 +308,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<WclUserToken>(e =>
             {
                 e.HasKey(t => t.Id);
-                e.Property(t => t.AccessToken).IsRequired();
-                e.Property(t => t.WclRefreshToken);
+                e.Property(t => t.Id).HasColumnName("id");
+                e.Property(t => t.AccessToken).HasColumnName("access_token").IsRequired();
+                e.Property(t => t.WclRefreshToken).HasColumnName("wcl_refresh_token");
+                e.Property(t => t.UserId).HasColumnName("user_id");
                 e.HasIndex(t => t.UserId).IsUnique(); // one token per user
 
                 e.HasOne(t => t.User)
@@ -304,8 +325,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<PerformanceEntry>(e =>
             {
                 e.HasKey(p => p.Id);
-                e.Property(p => p.Spec).HasMaxLength(32);
-                e.Property(p => p.Role).HasMaxLength(16);
+                e.Property(p => p.Id).HasColumnName("id");
+                e.Property(p => p.Spec).HasColumnName("spec").HasMaxLength(32);
+                e.Property(p => p.Role).HasColumnName("role").HasMaxLength(16);
+                e.Property(p => p.FightId).HasColumnName("fight_id");
+                e.Property(p => p.CharacterId).HasColumnName("character_id");
                 e.HasIndex(p => p.FightId);
                 e.HasIndex(p => p.CharacterId);
                 e.HasIndex(p => new { p.FightId, p.CharacterId }).IsUnique();
@@ -326,7 +350,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<Player>(e =>
             {
                 e.HasKey(p => p.Id);
-                e.Property(p => p.Name).HasMaxLength(64).IsRequired();
+                e.Property(p => p.Id).HasColumnName("id");
+                e.Property(p => p.Name).HasColumnName("name").HasMaxLength(64).IsRequired();
                 e.HasIndex(p => p.Name);
                 e.ToTable("players");
             });
@@ -334,24 +359,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<WclCredential>(e =>
             {
                 e.HasKey(c => c.Id);
-                e.Property(c => c.Id).ValueGeneratedNever();
-                e.Property(c => c.ClientIdEncrypted).IsRequired();
-                e.Property(c => c.ClientSecretEncrypted).IsRequired();
-                e.Property(c => c.Label).HasMaxLength(128);
+                e.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+                e.Property(c => c.ClientIdEncrypted).HasColumnName("client_id_encrypted").IsRequired();
+                e.Property(c => c.ClientSecretEncrypted).HasColumnName("client_secret_encrypted").IsRequired();
+                e.Property(c => c.Label).HasColumnName("label").HasMaxLength(128);
                 e.ToTable("wcl_credentials");
             });
 
         builder.Entity<ScoringSettings>(e =>
             {
                 e.HasKey(s => s.Id);
-                e.Property(s => s.Id).ValueGeneratedNever();
+                e.Property(s => s.Id).HasColumnName("id").ValueGeneratedNever();
                 e.ToTable("scoring_settings");
             });
 
         builder.Entity<ScoringTier>(e =>
             {
                 e.HasKey(t => t.Id);
-                e.Property(t => t.Label).HasMaxLength(64);
+                e.Property(t => t.Id).HasColumnName("id");
+                e.Property(t => t.Label).HasColumnName("label").HasMaxLength(64);
+                e.Property(t => t.ScoringSettingsId).HasColumnName("scoring_settings_id");
+                e.Property(t => t.MinPercent).HasColumnName("min_percent");
                 e.HasIndex(t => t.ScoringSettingsId);
                 e.HasIndex(t => new { t.ScoringSettingsId, t.MinPercent }).IsUnique();
 
@@ -366,7 +394,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<RaidWeek>(e =>
             {
                 e.HasKey(w => w.Id);
-                e.Property(w => w.Label).HasMaxLength(128).IsRequired();
+                e.Property(w => w.Id).HasColumnName("id");
+                e.Property(w => w.Label).HasColumnName("label").HasMaxLength(128).IsRequired();
+                e.Property(w => w.StartsAt).HasColumnName("starts_at");
                 // StartsAt deve ser sempre uma terça-feira — validado no controller
                 e.HasIndex(w => w.StartsAt).IsUnique();
                 e.Ignore(w => w.EndsAt);                // propriedade calculada
@@ -376,7 +406,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<RaidWeekReport>(e =>
             {
                 e.HasKey(r => r.Id);
-                e.Property(r => r.ReportCode).HasMaxLength(16).IsRequired();
+                e.Property(r => r.Id).HasColumnName("id");
+                e.Property(r => r.ReportCode).HasColumnName("report_code").HasMaxLength(16).IsRequired();
+                e.Property(r => r.RaidWeekId).HasColumnName("raid_week_id");
                 // Um mesmo report code não pode aparecer duas vezes na mesma semana
                 e.HasIndex(r => new { r.RaidWeekId, r.ReportCode }).IsUnique();
 
@@ -391,14 +423,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         builder.Entity<PenaltyEvent>(e =>
             {
                 e.HasKey(p => p.Id);
-                e.Property(p => p.Description).HasMaxLength(128).IsRequired();
+                e.Property(p => p.Id).HasColumnName("id");
+                e.Property(p => p.Description).HasColumnName("description").HasMaxLength(128).IsRequired();
                 e.ToTable("penalty_events");
             });
 
         builder.Entity<PlayerWeekPenalty>(e =>
             {
                 e.HasKey(p => p.Id);
-                e.Property(p => p.Note).HasMaxLength(256);
+                e.Property(p => p.Id).HasColumnName("id");
+                e.Property(p => p.Note).HasColumnName("note").HasMaxLength(256);
+                e.Property(p => p.RaidWeekId).HasColumnName("raid_week_id");
+                e.Property(p => p.PlayerId).HasColumnName("player_id");
+                e.Property(p => p.PenaltyEventId).HasColumnName("penalty_event_id");
                 e.HasIndex(p => new { p.RaidWeekId, p.PlayerId, p.PenaltyEventId });
 
                 e.HasOne(p => p.Player)
