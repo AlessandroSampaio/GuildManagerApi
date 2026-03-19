@@ -64,6 +64,8 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 | **JWT Bearer** | Autenticação local da API |
 | **BCrypt.Net** | Hash de senhas |
 | **IMemoryCache** | Cache de nonces anti-CSRF para o fluxo OAuth |
+| **Redis** | Store distribuído para contadores de rate limiting |
+| **AspNetCoreRateLimit** | Rate limiting por IP e por cliente |
 | **WebSockets** | Acompanhamento em tempo real do status de importação |
 | **Swagger / OpenAPI** | Documentação automática |
 | **Clean Architecture** | Domain · Application · Infrastructure · API |
@@ -74,6 +76,7 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - PostgreSQL 15+
+- Redis 7+ (usado como store distribuído para rate limiting)
 - Client WarcraftLogs registrado em [https://www.warcraftlogs.com/api/clients/](https://www.warcraftlogs.com/api/clients/)
   - Tipo: **Authorization Code** (necessário para a rota privada)
   - Redirect URI configurada: `https://localhost:5001/api/wcl-auth/callback`
@@ -84,16 +87,18 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 
 ### 4.1 Configurar credenciais
 
-Edite `src/API/appsettings.json`:
+Copie `src/Api/appsettings.example.json` para `src/Api/appsettings.json` e preencha os valores:
 
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=warcraftlogs;Username=postgres;Password=SUA_SENHA"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=warcraftlogs;Username=postgres;Password=SUA_SENHA",
+    "Redis": "localhost:6379,password=SUA_SENHA_REDIS,abortConnect=false"
+  },
+  "Encryption": {
+    "MasterKey": "GERE_COM: Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))"
   },
   "WarcraftLogs": {
-    "ClientId": "SEU_WCL_CLIENT_ID",
-    "ClientSecret": "SEU_WCL_CLIENT_SECRET",
     "TokenEndpoint": "https://www.warcraftlogs.com/oauth/token",
     "AuthorizeEndpoint": "https://www.warcraftlogs.com/oauth/authorize",
     "PublicGraphQlEndpoint": "https://www.warcraftlogs.com/api/v2/client",
@@ -106,30 +111,58 @@ Edite `src/API/appsettings.json`:
     "Audience": "WarcraftLogsApi",
     "AccessTokenExpiryMinutes": 60,
     "RefreshTokenExpiryDays": 30
-  }
+  },
+  "IpRateLimiting": { ... },
+  "ClientRateLimiting": { ... }
 }
 ```
+
+> As credenciais WCL (clientId/clientSecret) **não ficam no appsettings** — são configuradas via `PUT /api/admin/wcl-credentials` após o primeiro login com conta Admin.
+
+> **Dica:** Gere uma `SecretKey` forte com `openssl rand -base64 48`
 
 Ou via variáveis de ambiente:
 
 ```bash
 export ConnectionStrings__DefaultConnection="Host=localhost;Database=warcraftlogs;Username=postgres;Password=..."
-export WarcraftLogs__ClientId="seu_client_id"
-export WarcraftLogs__ClientSecret="seu_client_secret"
-export WarcraftLogs__RedirectUri="https://localhost:5001/api/wcl-auth/callback"
+export ConnectionStrings__Redis="localhost:6379,password=...,abortConnect=false"
 export Jwt__SecretKey="sua_chave_secreta"
+export Encryption__MasterKey="sua_master_key_base64"
 ```
 
-> **Dica:** Gere uma `SecretKey` forte com `openssl rand -base64 48`
+### 4.2 Rate Limiting
 
-### 4.2 Executar migrations
+A API usa **dois níveis** de rate limiting via `AspNetCoreRateLimit`, com contadores armazenados no **Redis** (necessário para ambientes multi-instância):
+
+#### Por IP (`IpRateLimiting`)
+
+Limita requisições com base no IP do cliente (detectado via `X-Real-IP` ou `X-Forwarded-For` em proxies reversos).
+
+| Endpoint | Janela | Limite |
+|----------|--------|--------|
+| `POST /api/auth/login` | 1 min | 5 req |
+| `*` (global) | 1 min | 60 req |
+
+#### Por Cliente (`ClientRateLimiting`)
+
+Limita por `X-ClientId` (header injetado pelo middleware `ClientIdInjectionMiddleware`).
+
+| Endpoint | Janela | Limite |
+|----------|--------|--------|
+| `*` (global) | 1 min | 120 req |
+| `*` (global) | 1 hora | 3.000 req |
+| `POST /api/*` | 1 min | 30 req |
+
+Os limites podem ser ajustados em `appsettings.json` nas seções `IpRateLimiting.GeneralRules` e `ClientRateLimiting.GeneralRules` sem necessidade de recompilação. Requisições bloqueadas retornam `429 Too Many Requests`.
+
+### 4.3 Executar migrations
 
 ```bash
 dotnet ef migrations add InitialCreate --project src/Infrastructure --startup-project src/API
 dotnet ef database update --project src/Infrastructure --startup-project src/API
 ```
 
-### 4.3 Iniciar a API
+### 4.4 Iniciar a API
 
 ```bash
 dotnet run --project src/API
@@ -453,6 +486,22 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | `GET` | `/api/guilds/{id}/reports` | ✅ | Lista reports de uma guilda (paginado) |
 | `GET` | `/api/guilds/{id}/characters` | ✅ | Lista personagens de uma guilda |
 | `GET` | `/api/guilds/{id}/roster` | ✅ | Retorna o roster da guilda com vínculo ao player (se houver) |
+| `POST` | `/api/guilds/{id}/sync-characters` | ✅ | Sincroniza todos os membros atuais da guilda via API do WarcraftLogs |
+
+#### Sync de personagens (`POST /api/guilds/{id}/sync-characters`)
+
+Busca todos os membros da guilda diretamente na API do WarcraftLogs (`guildData`) e faz upsert na base local. Útil para popular o roster sem depender de importações de reports.
+
+```json
+// Resposta 200
+{
+  "guildId": 1,
+  "guildName": "MinhaGuilda",
+  "charactersSynced": 42
+}
+```
+
+> A operação é **idempotente** — rodar múltiplas vezes não duplica personagens.
 
 ### Players
 
@@ -812,7 +861,7 @@ WarcraftLogsApi/
 
 - [ ] Background job para re-sincronizar reports periodicamente (Hangfire ou Worker Service)
 - [ ] Cache Redis para responses frequentes de consulta
-- [ ] Rate limiting para evitar abusos da cota da API WCL
+- [x] Rate limiting por IP e por cliente (AspNetCoreRateLimit + Redis)
 - [ ] Persistência do `state` OAuth em banco/Redis para ambientes com múltiplas instâncias
 - [ ] Testes de carga no endpoint de scoring com grandes volumes de reports
 
