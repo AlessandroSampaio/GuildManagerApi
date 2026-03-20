@@ -66,7 +66,7 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 | **IMemoryCache** | Cache de nonces anti-CSRF para o fluxo OAuth |
 | **Redis** | Store distribuído para contadores de rate limiting |
 | **AspNetCoreRateLimit** | Rate limiting por IP e por cliente |
-| **WebSockets** | Acompanhamento em tempo real do status de importação |
+| **WebSockets** | Acompanhamento em tempo real do status de importação de reports e sincronização de roster |
 | **Swagger / OpenAPI** | Documentação automática |
 | **Clean Architecture** | Domain · Application · Infrastructure · API |
 
@@ -330,7 +330,39 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
     ↳ se refresh token inválido      → 401 com mensagem de re-autorização
 ```
 
-### 7.4 Calcular pontuação de uma semana de raid
+### 7.4 Sincronizar roster de uma guilda
+
+```
+1.  POST /api/guilds/{id}/sync-characters     → enfileira o sync, retorna 202 + wsUrl
+    ↳ conecte no wsUrl retornado para acompanhar o progresso página a página
+2.  GET  /api/guilds/{id}/roster              → consulta o roster atualizado
+```
+
+> O sync é **paginado automaticamente** — percorre todas as páginas da API do WarcraftLogs (100 membros/página) sem necessidade de configuração adicional. Personagens com `gameData.error` são ignorados e logados.
+
+#### Eventos WebSocket durante o sync
+
+```json
+// fase: Started
+{ "guildId": 1, "phase": "Started",          "phaseCode": 0, "message": "Iniciando sincronização..." }
+
+// fase: FetchingPage (emitido por página)
+{ "guildId": 1, "phase": "FetchingPage",     "phaseCode": 1, "message": "Página 1/3 recebida — 100 membros.",
+  "data": { "currentPage": 1, "lastPage": 3, "count": 100 } }
+
+// fase: SavingCharacters (emitido por página, após salvar)
+{ "guildId": 1, "phase": "SavingCharacters", "phaseCode": 2, "message": "100 personagens salvos, 0 ignorados até agora.",
+  "data": { "synced": 100, "skipped": 0, "page": 1, "lastPage": 3 } }
+
+// fase: Completed
+{ "guildId": 1, "phase": "Completed",        "phaseCode": 3, "message": "Sincronização concluída: 287 personagem(ns) atualizado(s), 3 ignorado(s).",
+  "data": { "synced": 287, "skipped": 3 } }
+
+// fase: Failed (caso de erro)
+{ "guildId": 1, "phase": "Failed",           "phaseCode": 4, "message": "KeyNotFoundException: Guild 99 not found." }
+```
+
+### 7.5 Calcular pontuação de uma semana de raid
 
 ```
 1.  POST /api/raid-weeks                              → cria a semana (label + startsAt)
@@ -339,7 +371,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 4.  POST /api/player-scoring/by-week/{raidWeekId}     → calcula pontuação da semana
 ```
 
-### 7.5 Verificar status da autorização WCL
+### 7.6 Verificar status da autorização WCL
 
 ```bash
 GET /api/wcl-auth/status
@@ -352,7 +384,7 @@ Authorization: Bearer <seu_jwt>
 # { "userId": "...", "isAuthorized": false, "message": "Not authorized. Call GET /api/wcl-auth/authorize." }
 ```
 
-### 7.6 Revogar acesso WCL
+### 7.7 Revogar acesso WCL
 
 ```bash
 DELETE /api/wcl-auth/revoke
@@ -486,22 +518,51 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | `GET` | `/api/guilds/{id}/reports` | ✅ | Lista reports de uma guilda (paginado) |
 | `GET` | `/api/guilds/{id}/characters` | ✅ | Lista personagens de uma guilda |
 | `GET` | `/api/guilds/{id}/roster` | ✅ | Retorna o roster da guilda com vínculo ao player (se houver) |
-| `POST` | `/api/guilds/{id}/sync-characters` | ✅ | Sincroniza todos os membros atuais da guilda via API do WarcraftLogs |
+| `POST` | `/api/guilds/{id}/sync-characters` | ✅ | Enfileira a sincronização do roster em background — retorna `202 Accepted` imediatamente |
+| `GET` | `/api/guilds/{id}/sync/ws` | ✅ | WebSocket — recebe eventos de progresso da sincronização em tempo real |
 
 #### Sync de personagens (`POST /api/guilds/{id}/sync-characters`)
 
-Busca todos os membros da guilda diretamente na API do WarcraftLogs (`guildData`) e faz upsert na base local. Útil para popular o roster sem depender de importações de reports.
+Enfileira a sincronização do roster para execução em **background**, retornando imediatamente com `202 Accepted`. A sincronização percorre todas as páginas de membros do WarcraftLogs (100 por página) e faz upsert na base local, identificando cada personagem pelo `gameData.global.id` para garantir consistência com o fluxo de importação de reports.
 
 ```json
-// Resposta 200
+// Resposta 202 Accepted
 {
-  "guildId": 1,
-  "guildName": "MinhaGuilda",
-  "charactersSynced": 42
+  "message": "Sincronização da guilda \"MinhaGuilda\" iniciada.",
+  "wsUrl": "/api/guilds/1/sync/ws"
 }
 ```
 
+#### WebSocket de progresso (`GET /api/guilds/{id}/sync/ws`)
+
+Conecte-se antes ou durante a execução para receber os eventos em tempo real. A conexão permanece aberta até o processo concluir ou falhar.
+
+```
+fases emitidas: Started → FetchingPage (×N páginas) → SavingCharacters (×N páginas) → Completed | Failed
+```
+
+```json
+// Exemplo de payload por evento
+{
+  "guildId": 1,
+  "phase": "FetchingPage",
+  "phaseCode": 1,
+  "message": "Página 2/4 recebida — 100 membros.",
+  "data": { "currentPage": 2, "lastPage": 4, "count": 100 },
+  "timestamp": "2026-03-20T14:30:00Z"
+}
+```
+
+| `phaseCode` | `phase` | Significado |
+|-------------|---------|-------------|
+| `0` | `Started` | Sync iniciado |
+| `1` | `FetchingPage` | Página recebida do WCL |
+| `2` | `SavingCharacters` | Página persistida no banco |
+| `3` | `Completed` | Sync concluído com sucesso |
+| `4` | `Failed` | Erro — mensagem em `message` |
+
 > A operação é **idempotente** — rodar múltiplas vezes não duplica personagens.
+> Membros com `gameData.error` são ignorados e contabilizados em `data.skipped`.
 
 ### Players
 
@@ -822,6 +883,7 @@ WarcraftLogsApi/
 - [x] Implementar `WclAuthController` (authorize / callback / status / revoke)
 - [x] Implementar `ReportsController` com import assíncrono e WebSocket
 - [x] Implementar `CharactersController` e `GuildsController`
+- [x] Implementar sync de roster em background com paginação WCL e WebSocket de progresso
 - [x] Configurar Swagger com suporte a Bearer token
 - [x] Registrar `IMemoryCache` para estado anti-CSRF OAuth
 - [x] Tratamento de erros global (ProblemDetails)
@@ -853,12 +915,15 @@ WarcraftLogsApi/
 - A importação é **idempotente** — re-importar o mesmo report atualiza os dados existentes
 - O `RedirectUri` configurado no `appsettings.json` deve ser idêntico ao registrado no painel do WarcraftLogs
 - O `GlobalExceptionMiddleware` retorna respostas no formato **ProblemDetails** (RFC 7807)
-- O token JWT deve ser passado via query param `?access_token=<jwt>` ao conectar no endpoint WebSocket `/api/Reports/{code}/ws`
+- O token JWT deve ser passado via query param `?access_token=<jwt>` ao conectar nos endpoints WebSocket `/api/Reports/{code}/ws` e `/api/guilds/{id}/sync/ws`
+- O sync de roster usa `gameData.global.id` (ID do jogo) como `WclActorId` — o mesmo campo persistido pelo `ImportReportService` via `actor.GameId`. Isso garante que personagens encontrados em reports e no roster da guilda sejam reconhecidos como o mesmo registro no banco
+- Membros cujo `gameData` contenha o campo `error` são silenciosamente ignorados durante o sync — nenhum personagem parcial é persistido. O total de ignorados aparece em `data.skipped` nos eventos WebSocket e no log do servidor
 
 ---
 
 ## 14. Próximos Passos
 
+- [x] Background worker para sincronização paginada de roster de guilda (`GuildSyncWorker`)
 - [ ] Background job para re-sincronizar reports periodicamente (Hangfire ou Worker Service)
 - [ ] Cache Redis para responses frequentes de consulta
 - [x] Rate limiting por IP e por cliente (AspNetCoreRateLimit + Redis)
