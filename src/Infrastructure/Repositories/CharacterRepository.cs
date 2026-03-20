@@ -14,7 +14,11 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
         => _context.Characters.FirstOrDefaultAsync(c => c.WclActorId == wclActorId && c.Server.Equals(server), ct);
 
     public async Task<IEnumerable<Character>> GetByGuildAsync(int guildId, CancellationToken ct = default)
-        => await _context.Characters.Where(c => c.GuildId == guildId).ToListAsync(ct);
+        => await _context.Characters
+                    .Include(c => c.Class)
+                    .Include(c => c.Player)
+                    .Where(c => c.GuildId == guildId)
+                    .ToListAsync(ct);
 
     public async Task<IEnumerable<Class>> GetClassesAsync(CancellationToken ct = default)
         => await _context.Classes.ToListAsync(ct);

@@ -23,6 +23,9 @@ public class GuildRepository(AppDbContext context) : IGuildRepository
     public async Task<IEnumerable<Guild>> GetAllAsync(int page, int pageSize, CancellationToken ct = default)
         => await _context.Guilds
                      .Include(g => g.Characters)
+                        .ThenInclude(c => c.Class)
+                     .Include(g => g.Characters)
+                        .ThenInclude(c => c.Player)
                      .Include(g => g.Reports)
                      .OrderBy(g => g.Name)
                      .Skip((page - 1) * pageSize)
