@@ -45,7 +45,7 @@ public record WclGuildMembersResponse(WclGuildMembersData GuildData);
 public record WclGuildMembersData(WclGuildWithMembers? Guild);
 public record WclGuildWithMembers(int Id, string Name, WclMemberList? Members);
 public record WclMemberList(List<WclGuildMember>? Data);
-public record WclGuildMember(long Id, string Name, int ClassId, WclGuildMemberServer? Server);
+public record WclGuildMember(long Id, string Name, int ClassId, WclGuildMemberServer? Server, JsonElement? GameData = null);
 public record WclGuildMemberServer(string Name, WclGuildMemberRegion? Region);
 public record WclGuildMemberRegion(string Name);
 
@@ -141,6 +141,41 @@ public partial class WclGraphQLClient(
         return results;
     }
 
+    /// <summary>
+    /// Extrai o ID do jogo (equivalente ao <c>actor.GameId</c> do GetReport) a partir do
+    /// campo escalar <c>gameData</c> retornado pelo endpoint de membros da guilda.
+    /// A estrutura esperada é: <c>{ "global": { "id": 12345 } }</c>.
+    /// Suporta tanto <c>JsonValueKind.Object</c> (objeto direto) quanto
+    /// <c>JsonValueKind.String</c> (JSON embutido como string, padrão de alguns endpoints WCL).
+    /// </summary>
+    public static long? ExtractGameIdFromGameData(JsonElement? gameData)
+    {
+        if (gameData is null) return null;
+
+        JsonElement root;
+
+        if (gameData.Value.ValueKind == JsonValueKind.String)
+        {
+            // gameData retornado como string JSON embutida
+            var rawJson = gameData.Value.GetString();
+            if (string.IsNullOrWhiteSpace(rawJson)) return null;
+            root = JsonSerializer.Deserialize<JsonElement>(rawJson);
+        }
+        else if (gameData.Value.ValueKind == JsonValueKind.Object)
+        {
+            root = gameData.Value;
+        }
+        else
+        {
+            return null;
+        }
+
+        if (!root.TryGetProperty("global", out var globalEl)) return null;
+        if (!globalEl.TryGetProperty("id", out var idEl)) return null;
+
+        return idEl.TryGetInt64(out var id) ? id : null;
+    }
+
     private static readonly Dictionary<string, string> _regionAcronyms = new(StringComparer.OrdinalIgnoreCase)
     {
         { "United States", "US" },
@@ -167,6 +202,7 @@ public partial class WclGraphQLClient(
                   members {
                     data {
                       id
+                      gameData
                       name
                       classID
                       server { name region { name } }

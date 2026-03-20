@@ -32,9 +32,20 @@ public class GuildSyncService(
         {
             var cls = allClasses.FirstOrDefault(c => c.Id == member.ClassId);
 
+            // Usa gameData.global.id (ID do jogo) para manter consistência com o
+            // ImportReportService, que persiste actor.GameId como WclActorId.
+            // O member.Id é um ID interno do WCL e diverge do GameId dos actors.
+            var gameId = WclGraphQLClient.ExtractGameIdFromGameData(member.GameData);
+            if (gameId is null)
+            {
+                logger.LogWarning(
+                    "Membro {Name} não possui gameData.global.id — usando ID interno WCL ({WclId}) como fallback.",
+                    member.Name, member.Id);
+            }
+
             var character = new Character
             {
-                WclActorId = member.Id,
+                WclActorId = gameId ?? member.Id,
                 Name = member.Name,
                 Server = member.Server?.Name ?? guild.Server,
                 Region = member.Server?.Region?.Name ?? guild.Region,
