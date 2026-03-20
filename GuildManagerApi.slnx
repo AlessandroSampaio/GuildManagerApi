@@ -12,4 +12,7 @@
   <Folder Name="/src/Infrastructure/">
     <Project Path="src/Infrastructure/GuildManagerApi.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GuildManagerApi.Tests/GuildManagerApi.Tests.csproj" />
+  </Folder>
 </Solution>
