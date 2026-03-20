@@ -28,8 +28,22 @@ public class GuildSyncService(
         var allClasses = (await characters.GetClassesAsync(ct)).ToList();
         int synced = 0;
 
+        int skipped = 0;
+
         foreach (var member in members)
         {
+            // Se o WCL retornou gameData.error, o personagem não possui dados válidos
+            // de jogo — ignorar completamente para não persistir um registro corrompido.
+            var gameDataError = WclGraphQLClient.GetGameDataError(member.GameData);
+            if (gameDataError is not null)
+            {
+                logger.LogWarning(
+                    "Membro {Name} ignorado: gameData retornou erro — \"{Error}\".",
+                    member.Name, gameDataError);
+                skipped++;
+                continue;
+            }
+
             var cls = allClasses.FirstOrDefault(c => c.Id == member.ClassId);
 
             // Usa gameData.global.id (ID do jogo) para manter consistência com o
@@ -41,6 +55,7 @@ public class GuildSyncService(
                 logger.LogWarning(
                     "Membro {Name} não possui gameData.global.id — usando ID interno WCL ({WclId}) como fallback.",
                     member.Name, member.Id);
+                continue;
             }
 
             var character = new Character
@@ -57,7 +72,9 @@ public class GuildSyncService(
             synced++;
         }
 
-        logger.LogInformation("Synced {Count} characters for guild {Guild}", synced, guild.Name);
+        if (skipped > 0)
+            logger.LogWarning("{Skipped} membro(s) ignorado(s) por erro em gameData.", skipped);
+
         return new GuildSyncResultDto(guildId, guild.Name, synced);
     }
 }

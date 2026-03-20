@@ -142,35 +142,52 @@ public partial class WclGraphQLClient(
     }
 
     /// <summary>
-    /// Extrai o ID do jogo (equivalente ao <c>actor.GameId</c> do GetReport) a partir do
-    /// campo escalar <c>gameData</c> retornado pelo endpoint de membros da guilda.
-    /// A estrutura esperada é: <c>{ "global": { "id": 12345 } }</c>.
-    /// Suporta tanto <c>JsonValueKind.Object</c> (objeto direto) quanto
-    /// <c>JsonValueKind.String</c> (JSON embutido como string, padrão de alguns endpoints WCL).
+    /// Resolve o <see cref="JsonElement"/> raiz de <c>gameData</c>, suportando tanto
+    /// <c>JsonValueKind.Object</c> (objeto direto) quanto <c>JsonValueKind.String</c>
+    /// (JSON embutido como string, padrão de alguns endpoints WCL).
+    /// Retorna <c>null</c> se <paramref name="gameData"/> for nulo ou de tipo inesperado.
     /// </summary>
-    public static long? ExtractGameIdFromGameData(JsonElement? gameData)
+    private static JsonElement? ResolveGameDataRoot(JsonElement? gameData)
     {
         if (gameData is null) return null;
 
-        JsonElement root;
+        return gameData.Value.ValueKind switch
+        {
+            JsonValueKind.Object => gameData.Value,
+            JsonValueKind.String => JsonSerializer.Deserialize<JsonElement>(
+                gameData.Value.GetString() ?? string.Empty),
+            _ => null
+        };
+    }
 
-        if (gameData.Value.ValueKind == JsonValueKind.String)
-        {
-            // gameData retornado como string JSON embutida
-            var rawJson = gameData.Value.GetString();
-            if (string.IsNullOrWhiteSpace(rawJson)) return null;
-            root = JsonSerializer.Deserialize<JsonElement>(rawJson);
-        }
-        else if (gameData.Value.ValueKind == JsonValueKind.Object)
-        {
-            root = gameData.Value;
-        }
-        else
-        {
-            return null;
-        }
+    /// <summary>
+    /// Retorna a mensagem de erro contida em <c>gameData.error</c> quando o WCL sinaliza
+    /// que não foi possível recuperar os dados do personagem.
+    /// Estrutura esperada: <c>{ "error": "motivo da falha" }</c>.
+    /// Retorna <c>null</c> se não houver campo <c>error</c> (caso normal).
+    /// </summary>
+    public static string? GetGameDataError(JsonElement? gameData)
+    {
+        var root = ResolveGameDataRoot(gameData);
+        if (root is null) return null;
 
-        if (!root.TryGetProperty("global", out var globalEl)) return null;
+        return root.Value.TryGetProperty("error", out var errorEl)
+            ? errorEl.GetString()
+            : null;
+    }
+
+    /// <summary>
+    /// Extrai o ID do jogo (equivalente ao <c>actor.GameId</c> do GetReport) a partir do
+    /// campo escalar <c>gameData</c> retornado pelo endpoint de membros da guilda.
+    /// Estrutura esperada: <c>{ "global": { "id": 12345 } }</c>.
+    /// Retorna <c>null</c> se o campo não estiver presente ou se <c>gameData</c> contiver um erro.
+    /// </summary>
+    public static long? ExtractGameIdFromGameData(JsonElement? gameData)
+    {
+        var root = ResolveGameDataRoot(gameData);
+        if (root is null) return null;
+
+        if (!root.Value.TryGetProperty("global", out var globalEl)) return null;
         if (!globalEl.TryGetProperty("id", out var idEl)) return null;
 
         return idEl.TryGetInt64(out var id) ? id : null;
