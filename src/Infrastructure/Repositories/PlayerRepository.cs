@@ -51,6 +51,8 @@ public class PlayerRepository(AppDbContext context) : IPlayerRepository
         => _context.Players
                    .Include(p => p.Characters)
                        .ThenInclude(c => c.Guild)
+                    .Include(p => p.Characters)
+                       .ThenInclude(c => c.Class)
                    .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<bool> RemoveCharacterAsync(int playerId, int characterId, CancellationToken ct = default)
