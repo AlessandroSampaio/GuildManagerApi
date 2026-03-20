@@ -44,7 +44,9 @@ public record WclPlayerRanking(
 public record WclGuildMembersResponse(WclGuildMembersData GuildData);
 public record WclGuildMembersData(WclGuildWithMembers? Guild);
 public record WclGuildWithMembers(int Id, string Name, WclMemberList? Members);
-public record WclMemberList(List<WclGuildMember>? Data);
+// lastPage: last_page usa alias GraphQL para converter snake_case → camelCase
+// e evitar a necessidade de [JsonPropertyName] em positional records.
+public record WclMemberList(List<WclGuildMember>? Data, int? LastPage = null);
 public record WclGuildMember(long Id, string Name, int ClassId, WclGuildMemberServer? Server, JsonElement? GameData = null);
 public record WclGuildMemberServer(string Name, WclGuildMemberRegion? Region);
 public record WclGuildMemberRegion(string Name);
@@ -53,7 +55,11 @@ public interface IWclGraphQLClient
 {
     Task<WclReport> GetReportAsync(string reportCode, Guid? userId = null, CancellationToken ct = default);
     Task<Dictionary<int, List<WclPlayerRanking>>> GetRankingsAsync(string reportCode, IEnumerable<int> fightIds, Guid? userId = null, CancellationToken ct = default);
+    /// <summary>Obtém todos os membros iterando todas as páginas internamente.</summary>
     Task<List<WclGuildMember>> GetGuildMembersAsync(string guildName, string serverSlug, string serverRegion, Guid? userId = null, CancellationToken ct = default);
+
+    /// <summary>Obtém uma única página de membros. Retorna também o número da última página.</summary>
+    Task<(List<WclGuildMember> Members, int LastPage)> GetGuildMembersPageAsync(string guildName, string serverSlug, string serverRegion, int page, int limit = 100, Guid? userId = null, CancellationToken ct = default);
 }
 
 public partial class WclGraphQLClient(
@@ -205,18 +211,24 @@ public partial class WclGraphQLClient(
     private static string NormalizeRegion(string region)
         => _regionAcronyms.TryGetValue(region.Trim(), out var acronym) ? acronym : region.Trim();
 
-    public async Task<List<WclGuildMember>> GetGuildMembersAsync(
+    public async Task<(List<WclGuildMember> Members, int LastPage)> GetGuildMembersPageAsync(
         string guildName, string serverSlug, string serverRegion,
+        int page, int limit = 100,
         Guid? userId = null, CancellationToken ct = default)
     {
         var regionCode = NormalizeRegion(serverRegion);
-        Console.WriteLine($"Fetching guild members for guild {guildName}, server {serverSlug}, region {regionCode}");
+
+        // lastPage: last_page  →  alias GraphQL converte snake_case em camelCase para
+        // que o deserializador case-insensitive mapeie corretamente para LastPage.
         const string query = """
-            query GetGuildMembers($guildName: String!, $serverSlug: String!, $serverRegion: String!) {
+            query GetGuildMembers(
+              $guildName: String!, $serverSlug: String!, $serverRegion: String!,
+              $limit: Int!, $page: Int!
+            ) {
               guildData {
                 guild(name: $guildName, serverSlug: $serverSlug, serverRegion: $serverRegion) {
                   id
-                  members {
+                  members(limit: $limit, page: $page) {
                     data {
                       id
                       gameData
@@ -224,21 +236,48 @@ public partial class WclGraphQLClient(
                       classID
                       server { name region { name } }
                     }
+                    lastPage: last_page
                   }
                 }
               }
             }
             """;
+
         var response = await ExecuteQueryAsync<WclGuildMembersResponse>(
             query,
-            new { guildName, serverSlug, serverRegion = regionCode },
+            new { guildName, serverSlug, serverRegion = regionCode, limit, page },
             userId, ct);
 
         if (response.GuildData.Guild is null)
             throw new KeyNotFoundException(
                 $"Guild \"{guildName}\" não encontrada no WarcraftLogs para o servidor \"{serverSlug}\" ({regionCode}).");
 
-        return response.GuildData.Guild.Members?.Data ?? [];
+        var members  = response.GuildData.Guild.Members?.Data ?? [];
+        var lastPage = response.GuildData.Guild.Members?.LastPage ?? 1;
+
+        return (members, lastPage);
+    }
+
+    public async Task<List<WclGuildMember>> GetGuildMembersAsync(
+        string guildName, string serverSlug, string serverRegion,
+        Guid? userId = null, CancellationToken ct = default)
+    {
+        var all  = new List<WclGuildMember>();
+        int page = 1;
+        int lastPage;
+
+        do
+        {
+            var (members, lp) = await GetGuildMembersPageAsync(
+                guildName, serverSlug, serverRegion, page, limit: 100, userId, ct);
+
+            all.AddRange(members);
+            lastPage = lp;
+            page++;
+        }
+        while (page <= lastPage);
+
+        return all;
     }
 
     private async Task<(string endpoint, string token)> ResolveEndpointAndTokenAsync(

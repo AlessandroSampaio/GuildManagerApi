@@ -126,6 +126,9 @@ builder.Services.AddSingleton<ImportProgressHub>();
 builder.Services.AddSingleton<IImportProgressHub>(sp =>
     sp.GetRequiredService<ImportProgressHub>());
 
+builder.Services.AddSingleton<IGuildSyncQueue, GuildSyncQueue>();
+builder.Services.AddSingleton<GuildSyncHub>();
+
 // Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();
 builder.Services.AddScoped<ICharacterRepository, CharacterRepository>();
@@ -135,6 +138,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPenaltyRepository, PenaltyRepository>();
 
 builder.Services.AddHostedService<ImportWorker>();
+builder.Services.AddHostedService<GuildSyncWorker>();
 
 // API
 // In-memory cache for OAuth state nonces (anti-CSRF)

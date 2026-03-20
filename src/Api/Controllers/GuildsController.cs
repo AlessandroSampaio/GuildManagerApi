@@ -1,4 +1,3 @@
-
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
@@ -12,11 +11,16 @@ namespace GuildManagerApi.Api.Controllers;
 [Route("api/guilds")]
 [Produces("application/json")]
 [Authorize]
-public class GuildsController(IGuildRepository guilds, ICharacterRepository characters, IGuildSyncService guildSync) : ControllerBase
+public class GuildsController(
+    IGuildRepository guilds,
+    ICharacterRepository characters,
+    IGuildSyncQueue syncQueue,
+    GuildSyncHub syncHub) : ControllerBase
 {
-    private readonly IGuildRepository _guilds = guilds;
+    private readonly IGuildRepository    _guilds    = guilds;
     private readonly ICharacterRepository _characters = characters;
-    private readonly IGuildSyncService _guildSync = guildSync;
+    private readonly IGuildSyncQueue     _syncQueue  = syncQueue;
+    private readonly GuildSyncHub        _syncHub    = syncHub;
 
 
     [HttpGet("{id:int}")]
@@ -75,10 +79,8 @@ public class GuildsController(IGuildRepository guilds, ICharacterRepository char
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var guilds = await _guilds.GetAllAsync(page, pageSize, ct);
-        var total = await _guilds.CountAsync(ct);
+        var total  = await _guilds.CountAsync(ct);
 
-        // Character count: carregado pelo Include na GuildRepository.GetAllAsync
-        // Report count:    consultado via navigation
         var dtos = guilds.Select(g => new GuildListDto(
             g.Id,
             g.Name,
@@ -101,33 +103,63 @@ public class GuildsController(IGuildRepository guilds, ICharacterRepository char
 
         var chars = await _characters.GetByGuildAsync(id, ct);
         var dtos = chars.Select(c => new RosterEntryDto(
-            CharacterId: c.Id,
+            CharacterId:   c.Id,
             CharacterName: c.Name,
-            Server: c.Server,
-            Region: c.Region,
-            Class: c.Class?.Name ?? "unknown",
-            PlayerId: c.PlayerId,
-            PlayerName: c.Player?.Name
+            Server:        c.Server,
+            Region:        c.Region,
+            Class:         c.Class?.Name ?? "unknown",
+            PlayerId:      c.PlayerId,
+            PlayerName:    c.Player?.Name
         ));
 
         return Ok(dtos);
     }
 
+    /// <summary>
+    /// Enfileira a sincronização de personagens da guilda para execução em background.
+    /// Conecte-se ao WebSocket em <c>GET /api/guilds/{id}/sync/ws</c> para acompanhar o progresso.
+    /// </summary>
     [HttpPost("{id:int}/sync-characters")]
-    [ProducesResponseType(typeof(GuildSyncResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SyncCharacters([FromRoute] int id, CancellationToken ct)
     {
+        var guild = await _guilds.GetByIdAsync(id, ct);
+        if (guild is null) return NotFound(new { message = $"Guild {id} not found." });
+
         var userId = GetUserId();
-        try
+        await _syncQueue.EnqueueAsync(new GuildSyncJob(id, userId), ct);
+
+        return Accepted(new
         {
-            var result = await _guildSync.SyncCharactersAsync(id, userId, ct);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
+            message  = $"Sincronização da guilda \"{guild.Name}\" iniciada.",
+            wsUrl    = $"/api/guilds/{id}/sync/ws"
+        });
+    }
+
+    /// <summary>
+    /// WebSocket — transmite eventos de progresso da sincronização em tempo real.
+    /// Conecte-se antes ou durante a execução; a conexão permanece aberta até o processo concluir.
+    /// </summary>
+    [HttpGet("{id:int}/sync/ws")]
+    public async Task SyncProgressWebSocket([FromRoute] int id, CancellationToken ct)
+    {
+        if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
-            return NotFound(new { message = ex.Message });
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
         }
+
+        var guild = await _guilds.GetByIdAsync(id, ct);
+        if (guild is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        _syncHub.Register(id, socket);
+        await _syncHub.WaitForCloseAsync(socket, ct);
     }
 
     private Guid? GetUserId()
