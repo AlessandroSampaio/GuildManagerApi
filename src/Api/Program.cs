@@ -128,6 +128,7 @@ builder.Services.AddSingleton<IImportProgressHub>(sp =>
 
 builder.Services.AddSingleton<IGuildSyncQueue, GuildSyncQueue>();
 builder.Services.AddSingleton<GuildSyncHub>();
+builder.Services.AddSingleton<RaidWeekHub>();
 
 // Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();

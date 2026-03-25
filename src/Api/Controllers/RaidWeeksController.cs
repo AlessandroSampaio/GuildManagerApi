@@ -1,4 +1,5 @@
 using GuildManagerApi.Application.DTOs;
+using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Entities;
 using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Repositories;
@@ -14,11 +15,13 @@ namespace GuildManagerApi.Api.Controllers;
 public class RaidWeeksController(
         IRaidWeekRepository repository,
         IPenaltyRepository penalties,
-        IPlayerRepository players) : ControllerBase
+        IPlayerRepository players,
+        RaidWeekHub hub) : ControllerBase
 {
     private readonly IRaidWeekRepository _repository = repository;
     private readonly IPenaltyRepository _penalties = penalties;
     private readonly IPlayerRepository _players = players;
+    private readonly RaidWeekHub _hub = hub;
 
 
 
@@ -69,6 +72,31 @@ public class RaidWeeksController(
                       $"The week would start on {RaidWeekRepository.TuesdayOf(date):yyyy-MM-dd} (Tuesday)."
         });
         return Ok(ToDto(week));
+    }
+
+    /// <summary>
+    /// WebSocket — notifica em tempo real quando a semana de raid sofre alterações.
+    /// Conecte-se a <c>GET /api/raid-weeks/{id}/ws</c> para receber eventos de mudança.
+    /// </summary>
+    [HttpGet("{id:int}/ws")]
+    public async Task ChangesWebSocket([FromRoute] int id, CancellationToken ct)
+    {
+        if (!HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var week = await _repository.GetByIdAsync(id, ct);
+        if (week is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        _hub.Register(id, socket);
+        await _hub.WaitForCloseAsync(socket, ct);
     }
 
     [HttpPost]
@@ -138,6 +166,7 @@ public class RaidWeeksController(
         if (!updated) return NotFound();
 
         var week = await _repository.GetByIdAsync(id, ct);
+        _ = _hub.BroadcastAsync(id, "updated");
         return Ok(ToDto(week!));
     }
 
@@ -148,7 +177,10 @@ public class RaidWeeksController(
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         var deleted = await _repository.DeleteAsync(id, ct);
-        return deleted ? NoContent() : NotFound();
+        if (!deleted) return NotFound();
+
+        _ = _hub.BroadcastAsync(id, "deleted");
+        return NoContent();
     }
 
     [HttpPost("{id:int}/reports/{reportCode}")]
@@ -172,6 +204,7 @@ public class RaidWeeksController(
         await _repository.AddReportAsync(id, code, ct);
 
         var updated = await _repository.GetByIdAsync(id, ct);
+        _ = _hub.BroadcastAsync(id, "reportAdded");
         return Ok(ToDto(updated!));
     }
 
@@ -192,6 +225,7 @@ public class RaidWeeksController(
         });
 
         var week = await _repository.GetByIdAsync(id, ct);
+        _ = _hub.BroadcastAsync(id, "reportRemoved");
         return Ok(ToDto(week!));
     }
 
@@ -248,6 +282,7 @@ public class RaidWeeksController(
 
         var penaltyId = await _penalties.AddPlayerPenaltyAsync(penalty, ct);
         var created = await _penalties.GetPenaltyByIdAsync(penaltyId, ct);
+        _ = _hub.BroadcastAsync(id, "penaltyAdded");
         return Created($"api/raid-weeks/{id}/penalties", ToPenaltyDto(created!));
     }
 
@@ -267,6 +302,7 @@ public class RaidWeeksController(
         if (penalty is null || penalty.RaidWeekId != id) return NotFound();
 
         await _penalties.RemovePlayerPenaltyAsync(penaltyId, ct);
+        _ = _hub.BroadcastAsync(id, "penaltyRemoved");
         return NoContent();
     }
 
