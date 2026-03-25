@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Domain.Exceptions;
 using GuildManagerApi.Domain.Interfaces;
@@ -13,10 +14,12 @@ namespace GuildManagerApi.Api.Controllers;
 [Produces("application/json")]
 public class AdminController(
     IWclCredentialService credentialService,
-    IScoringSettingsRepository scoringSettingsRepository) : ControllerBase
+    IScoringSettingsRepository scoringSettingsRepository,
+    IAuditService audit) : ControllerBase
 {
     private readonly IWclCredentialService _credentialsService = credentialService;
     private readonly IScoringSettingsRepository _scoringSettingsRepository = scoringSettingsRepository;
+    private readonly IAuditService _audit = audit;
 
     [HttpPut("wcl-credentials")]
     [ProducesResponseType(typeof(WclCredentialStatusResponse), StatusCodes.Status200OK)]
@@ -38,6 +41,9 @@ public class AdminController(
                    request.ClientSecret.Trim(),
                    request.Label?.Trim(),
                    ct);
+
+        await _audit.LogAsync("WclCredentials.Updated", "WclCredential",
+            actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
 
         return Ok(new WclCredentialStatusResponse(
             Configured: true,
@@ -98,6 +104,8 @@ public class AdminController(
             ));
 
             var settings = await _scoringSettingsRepository.SaveAsync(inputs, ct);
+            await _audit.LogAsync("ScoringSettings.Updated", "ScoringSettings",
+                actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
             return Ok(ToDto(settings));
         }
         catch (ScoringValidationException ex)
@@ -113,7 +121,11 @@ public class AdminController(
     public async Task<IActionResult> DeleteScoringSettings(CancellationToken ct)
     {
         var deleted = await _scoringSettingsRepository.DeleteAsync(ct);
-        return deleted ? NoContent() : NotFound(new { message = "No scoring settings to delete." });
+        if (!deleted) return NotFound(new { message = "No scoring settings to delete." });
+
+        await _audit.LogAsync("ScoringSettings.Deleted", "ScoringSettings",
+            actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
+        return NoContent();
     }
 
     [HttpGet("scoring-settings/calculate")]
@@ -150,6 +162,40 @@ public class AdminController(
         ));
     }
 
+
+    [HttpGet("audit-log")]
+    [ProducesResponseType(typeof(PagedResult<AuditLogDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAuditLog(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? entityType = null,
+        [FromQuery] string? action = null,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        CancellationToken ct = default)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        var (items, total) = await _audit.QueryAsync(page, pageSize, entityType, action, from, to, ct);
+
+        var dtos = items.Select(a => new AuditLogDto(
+            a.Id, a.Action, a.EntityType, a.EntityId,
+            a.ActorId, a.ActorUsername, a.Details, a.OccurredAt
+        )).ToList();
+
+        return Ok(new PagedResult<AuditLogDto>(dtos, page, pageSize, total));
+    }
+
+    private Guid? GetActorId()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
+               ?? User.FindFirstValue("sub");
+        return Guid.TryParse(sub, out var id) ? id : null;
+    }
+
+    private string? GetActorUsername() =>
+        User.FindFirstValue(ClaimTypes.Name)
+        ?? User.Identity?.Name;
 
     private static ScoringSettingsDto ToDto(Domain.Entities.ScoringSettings s) =>
            new(

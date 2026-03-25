@@ -120,3 +120,15 @@ public record PagedResult<T>(
     int PageSize,
     int Total
 );
+
+// Audit
+public record AuditLogDto(
+    int Id,
+    string Action,
+    string EntityType,
+    string? EntityId,
+    Guid? ActorId,
+    string? ActorUsername,
+    string? Details,
+    DateTime OccurredAt
+);

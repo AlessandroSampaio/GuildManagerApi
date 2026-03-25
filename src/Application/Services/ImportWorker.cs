@@ -37,13 +37,15 @@ public sealed partial class ImportWorker(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var importService = scope.ServiceProvider.GetRequiredService<IImportReportService>();
-        var reportRepo = scope.ServiceProvider.GetRequiredService<IReportRepository>();
+        var reportRepo    = scope.ServiceProvider.GetRequiredService<IReportRepository>();
+        var audit         = scope.ServiceProvider.GetRequiredService<IAuditService>();
 
         var progress = new HubProgress(_hub, ct);
 
         try
         {
             await reportRepo.SetImportStatusAsync(job.ReportCode, ImportStatus.Importing, ct: default);
+            await audit.LogAsync("Report.ImportStarted", "Report", job.ReportCode, job.UserId, ct: default);
 
             await importService.ImportAsync(
                 job.ReportCode,
@@ -52,12 +54,15 @@ public sealed partial class ImportWorker(
                 ct: ct);
 
             await reportRepo.SetImportStatusAsync(job.ReportCode, ImportStatus.Done, ct: default);
+            await audit.LogAsync("Report.ImportCompleted", "Report", job.ReportCode, job.UserId, ct: default);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             _logger.LogWarning("Import job cancelled: {Code}", job.ReportCode);
             await reportRepo.SetImportStatusAsync(
                 job.ReportCode, ImportStatus.Failed, "Importação cancelada.", ct: default);
+            await audit.LogAsync("Report.ImportFailed", "Report", job.ReportCode, job.UserId,
+                details: "Importação cancelada.", ct: default);
 
             await _hub.BroadcastAsync(new ImportProgressEvent(
                 job.ReportCode, ImportPhase.Failed, "Importação cancelada."), ct: default);
@@ -71,6 +76,8 @@ public sealed partial class ImportWorker(
             {
                 await reportRepo.SetImportStatusAsync(
                     job.ReportCode, ImportStatus.Failed, errorMsg, ct: default);
+                await audit.LogAsync("Report.ImportFailed", "Report", job.ReportCode, job.UserId,
+                    details: errorMsg, ct: default);
             }
             catch (Exception dbEx)
             {

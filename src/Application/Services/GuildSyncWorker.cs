@@ -31,17 +31,24 @@ public sealed partial class GuildSyncWorker(
 
     private async Task ProcessJobAsync(GuildSyncJob job, CancellationToken ct)
     {
-        await using var scope       = _scopeFactory.CreateAsyncScope();
-        var syncService             = scope.ServiceProvider.GetRequiredService<IGuildSyncService>();
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var syncService       = scope.ServiceProvider.GetRequiredService<IGuildSyncService>();
+        var audit             = scope.ServiceProvider.GetRequiredService<IAuditService>();
         IProgress<GuildSyncProgressEvent> progress = new HubProgress(_hub, ct);
+
+        var entityId = job.GuildId.ToString();
 
         try
         {
+            await audit.LogAsync("Guild.SyncStarted", "Guild", entityId, job.UserId, ct: default);
             await syncService.SyncCharactersAsync(job.GuildId, job.UserId, progress, ct);
+            await audit.LogAsync("Guild.SyncCompleted", "Guild", entityId, job.UserId, ct: default);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             _logger.LogWarning("Guild sync cancelled: guildId={GuildId}", job.GuildId);
+            await audit.LogAsync("Guild.SyncFailed", "Guild", entityId, job.UserId,
+                details: "Sincronização cancelada.", ct: default);
 
             await _hub.BroadcastAsync(new GuildSyncProgressEvent(
                 job.GuildId, GuildSyncPhase.Failed, "Sincronização cancelada."), ct: default);
@@ -50,9 +57,12 @@ public sealed partial class GuildSyncWorker(
         {
             _logger.LogError(ex, "Guild sync failed: guildId={GuildId}", job.GuildId);
 
+            var errorMsg = $"{ex.GetType().Name}: {ex.Message}";
+            await audit.LogAsync("Guild.SyncFailed", "Guild", entityId, job.UserId,
+                details: errorMsg, ct: default);
+
             await _hub.BroadcastAsync(new GuildSyncProgressEvent(
-                job.GuildId, GuildSyncPhase.Failed,
-                $"{ex.GetType().Name}: {ex.Message}"), ct: default);
+                job.GuildId, GuildSyncPhase.Failed, errorMsg), ct: default);
         }
     }
 

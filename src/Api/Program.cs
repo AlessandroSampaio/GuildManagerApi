@@ -113,6 +113,7 @@ builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
 // Application Services
 builder.Services.AddScoped<IImportReportService, ImportReportService>();
 builder.Services.AddScoped<IGuildSyncService, GuildSyncService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
 builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository>();

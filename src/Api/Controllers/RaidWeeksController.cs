@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Entities;
@@ -16,12 +17,14 @@ public class RaidWeeksController(
         IRaidWeekRepository repository,
         IPenaltyRepository penalties,
         IPlayerRepository players,
-        RaidWeekHub hub) : ControllerBase
+        RaidWeekHub hub,
+        IAuditService audit) : ControllerBase
 {
     private readonly IRaidWeekRepository _repository = repository;
     private readonly IPenaltyRepository _penalties = penalties;
     private readonly IPlayerRepository _players = players;
     private readonly RaidWeekHub _hub = hub;
+    private readonly IAuditService _audit = audit;
 
 
 
@@ -226,6 +229,9 @@ public class RaidWeeksController(
 
         var week = await _repository.GetByIdAsync(id, ct);
         _ = _hub.BroadcastAsync(id, "reportRemoved");
+        await _audit.LogAsync("Report.RemovedFromWeek", "RaidWeek", id.ToString(),
+            GetActorId(), GetActorUsername(),
+            details: $"reportCode={reportCode.Trim()}", ct: ct);
         return Ok(ToDto(week!));
     }
 
@@ -283,6 +289,9 @@ public class RaidWeeksController(
         var penaltyId = await _penalties.AddPlayerPenaltyAsync(penalty, ct);
         var created = await _penalties.GetPenaltyByIdAsync(penaltyId, ct);
         _ = _hub.BroadcastAsync(id, "penaltyAdded");
+        await _audit.LogAsync("Penalty.Added", "RaidWeek", id.ToString(),
+            GetActorId(), GetActorUsername(),
+            details: $"playerId={request.PlayerId}, penaltyEventId={request.PenaltyEventId}", ct: ct);
         return Created($"api/raid-weeks/{id}/penalties", ToPenaltyDto(created!));
     }
 
@@ -303,10 +312,23 @@ public class RaidWeeksController(
 
         await _penalties.RemovePlayerPenaltyAsync(penaltyId, ct);
         _ = _hub.BroadcastAsync(id, "penaltyRemoved");
+        await _audit.LogAsync("Penalty.Removed", "RaidWeek", id.ToString(),
+            GetActorId(), GetActorUsername(),
+            details: $"penaltyId={penaltyId}", ct: ct);
         return NoContent();
     }
 
-    //Helpers
+    // Helpers
+    private Guid? GetActorId()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
+               ?? User.FindFirstValue("sub");
+        return Guid.TryParse(sub, out var id) ? id : null;
+    }
+
+    private string? GetActorUsername() =>
+        User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name;
+
     private static RaidWeekDto ToDto(RaidWeek w) => new(
             w.Id,
             w.Label,

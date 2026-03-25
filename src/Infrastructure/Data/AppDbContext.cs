@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RaidWeekReport> RaidWeekReports => Set<RaidWeekReport>();
     public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
     public DbSet<PlayerWeekPenalty> PlayerWeekPenalties => Set<PlayerWeekPenalty>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -454,6 +455,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     .OnDelete(DeleteBehavior.Restrict);
 
                 e.ToTable("player_week_penalties");
+            });
+
+        builder.Entity<AuditLog>(e =>
+            {
+                e.HasKey(a => a.Id);
+                e.Property(a => a.Id).HasColumnName("id");
+                e.Property(a => a.Action).HasColumnName("action").HasMaxLength(100).IsRequired();
+                e.Property(a => a.EntityType).HasColumnName("entity_type").HasMaxLength(100).IsRequired();
+                e.Property(a => a.EntityId).HasColumnName("entity_id").HasMaxLength(100);
+                e.Property(a => a.ActorId).HasColumnName("actor_id");
+                e.Property(a => a.ActorUsername).HasColumnName("actor_username").HasMaxLength(100);
+                e.Property(a => a.Details).HasColumnName("details");
+                e.Property(a => a.OccurredAt).HasColumnName("occurred_at");
+                e.HasIndex(a => a.OccurredAt);
+                e.HasIndex(a => a.EntityType);
+                e.HasIndex(a => a.Action);
+                e.ToTable("audit_logs");
             });
     }
 }
