@@ -12,7 +12,7 @@ namespace GuildManagerApi.Api.Controllers;
 [ApiController]
 [Route("api/raid-weeks")]
 [Produces("application/json")]
-[Authorize(Policy = "MemberOrAdmin")]
+[Authorize]
 public class RaidWeeksController(
         IRaidWeekRepository repository,
         IPenaltyRepository penalties,

@@ -13,7 +13,7 @@ namespace GuildManagerApi.Api.Controllers;
 [ApiController]
 [Route("api/penalty-events")]
 [Produces("application/json")]
-[Authorize(Policy = "MemberOrAdmin")]
+[Authorize]
 public class PenaltyEventsController(IPenaltyRepository repository) : ControllerBase
 {
     private readonly IPenaltyRepository _repository = repository;
