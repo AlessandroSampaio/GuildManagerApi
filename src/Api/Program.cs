@@ -228,8 +228,10 @@ if (app.Environment.IsDevelopment())
 }
 
 
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseWebSockets();
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
