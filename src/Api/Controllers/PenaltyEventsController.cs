@@ -44,8 +44,8 @@ public class PenaltyEventsController(IPenaltyRepository repository) : Controller
         if (string.IsNullOrWhiteSpace(request.Description))
             return BadRequest(new { error = "Description is required." });
 
-        if (request.Points <= 0)
-            return BadRequest(new { error = "Points must be greater than zero." });
+        if (request.Points < 0)
+            return BadRequest(new { error = "Points must be greater or equal than zero." });
 
         var ev = new PenaltyEvent
         {
