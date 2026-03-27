@@ -82,11 +82,14 @@ public class RaidWeeksController(
     /// Conecte-se a <c>GET /api/raid-weeks/{id}/ws</c> para receber eventos de mudança.
     /// </summary>
     [HttpGet("{id:int}/ws")]
+    [AllowAnonymous]
     public async Task ChangesWebSocket([FromRoute] int id, CancellationToken ct)
     {
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await HttpContext.Response.WriteAsync(
+                "Requisição WebSocket esperada. Use ws:// ou wss://.", ct);
             return;
         }
 
