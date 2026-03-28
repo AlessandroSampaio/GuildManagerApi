@@ -80,6 +80,45 @@ public class ReportsController(
             ));
     }
 
+    [HttpPost("{reportCode}/update")]
+    [ProducesResponseType(typeof(ImportAcceptedDto), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateReport([FromRoute] string reportCode, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reportCode) || reportCode.Length > 16)
+            return BadRequest("Invalid report code");
+
+        var userId = GetUserId();
+
+        var existing = await _reports.GetByIdAsync(reportCode, ct);
+        if (existing is null)
+            return NotFound();
+
+        if (existing.ImportStatus is ImportStatus.Importing or ImportStatus.Queued)
+        {
+            return Conflict(new
+            {
+                error = "This report is already being imported.",
+                status = existing.ImportStatus.ToString()
+            });
+        }
+
+        await _reports.SetImportStatusAsync(reportCode, ImportStatus.Queued, null, ct);
+        await _queue.EnqueueAsync(new ImportJob(reportCode, userId), ct);
+
+        return AcceptedAtAction(
+            nameof(GetReport),
+            new { reportCode },
+            new ImportAcceptedDto(
+                ReportCode: reportCode,
+                Status: "queued",
+                WsUrl: $"/api/reports/{reportCode}/ws",
+                Message: "Reimportação enfileirada. Conecte-se ao WebSocket para acompanhar o progresso."
+            ));
+    }
+
     [HttpGet("{reportCode}/ws")]
     [AllowAnonymous]
     public async Task StreamProgress(
