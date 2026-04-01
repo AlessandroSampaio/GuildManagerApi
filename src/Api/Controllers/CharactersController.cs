@@ -48,6 +48,26 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
     }
 
     /// <summary>
+    /// Redireciona para o perfil Raider.IO do personagem usando os dados locais.
+    /// </summary>
+    [HttpGet("{id:int}/raider-io/profile")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRaiderIoProfile([FromRoute] int id, CancellationToken ct)
+    {
+        var character = await _characters.GetByIdAsync(id, ct);
+        if (character is null) return NotFound();
+
+        var region = NormalizeRegion(character.Region);
+        var url = $"/api/raider-io/characters/profile" +
+                  $"?region={Uri.EscapeDataString(region)}" +
+                  $"&realm={Uri.EscapeDataString(character.Server ?? "")}" +
+                  $"&name={Uri.EscapeDataString(character.Name ?? "")}";
+
+        return Redirect(url);
+    }
+
+    /// <summary>
     /// Busca characters por nome (substring) e/ou classe, paginado.
     /// Retorna o player vinculado se houver.
     /// </summary>
@@ -77,4 +97,18 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
 
         return Ok(new PagedResult<CharacterSearchResultDto>(dtos, page, pageSize, total));
     }
+
+    private static readonly Dictionary<string, string> _regionMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "United States", "us" },
+        { "Europe",        "eu" },
+        { "Korea",         "kr" },
+        { "Taiwan",        "tw" },
+        { "China",         "cn" },
+    };
+
+    private static string NormalizeRegion(string? region)
+        => region is not null && _regionMap.TryGetValue(region.Trim(), out var code)
+            ? code
+            : region?.Trim().ToLower() ?? "";
 }
