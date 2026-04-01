@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
     public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
+    public DbSet<RaiderIoCredential> RaiderIoCredentials => Set<RaiderIoCredential>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
     public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
@@ -472,6 +473,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasIndex(a => a.EntityType);
                 e.HasIndex(a => a.Action);
                 e.ToTable("audit_logs");
+            });
+
+        builder.Entity<RaiderIoCredential>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+                e.Property(c => c.ApiKeyEncrypted).HasColumnName("api_key_encrypted").IsRequired();
+                e.Property(c => c.Label).HasColumnName("label").HasMaxLength(128);
+                e.Property(c => c.CreatedAt).HasColumnName("created_at");
+                e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
+                e.ToTable("raider_io_credentials");
             });
     }
 }
