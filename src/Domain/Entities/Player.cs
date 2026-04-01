@@ -8,4 +8,5 @@ public class Player
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<Character> Characters { get; set; } = [];
+    public ICollection<CorePlayer> CoreMemberships { get; set; } = [];
 }

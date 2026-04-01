@@ -24,6 +24,8 @@ builder.Services.Configure<WclAuthOptions>(
 
 builder.Services.Configure<BNetAuthOptions>(
     builder.Configuration.GetSection(BNetAuthOptions.Section));
+builder.Services.Configure<RaiderIoOptions>(
+    builder.Configuration.GetSection(RaiderIoOptions.Section));
 
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.Section));
@@ -124,7 +126,12 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
 builder.Services.AddScoped<IBattleNetCredentialService, BattleNetCredentialService>();
+builder.Services.AddScoped<IRaiderIoCredentialService, RaiderIoCredentialService>();
+builder.Services.AddScoped<IRaiderIoService, RaiderIoService>();
+builder.Services.AddHttpClient<IRaiderIoService, RaiderIoService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository>();
+builder.Services.AddScoped<ICoreRepository, CoreRepository>();
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 builder.Services.AddScoped<IRaidWeekRepository, RaidWeekRepository>();
 builder.Services.AddSingleton<IJwtService, JwtService>();

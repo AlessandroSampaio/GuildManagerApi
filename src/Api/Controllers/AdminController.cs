@@ -15,11 +15,13 @@ namespace GuildManagerApi.Api.Controllers;
 public class AdminController(
     IWclCredentialService credentialService,
     IBattleNetCredentialService bnetCredentialService,
+    IRaiderIoCredentialService raiderIoCredentialService,
     IScoringSettingsRepository scoringSettingsRepository,
     IAuditService audit) : ControllerBase
 {
     private readonly IWclCredentialService _credentialsService = credentialService;
     private readonly IBattleNetCredentialService _bnetCredentialsService = bnetCredentialService;
+    private readonly IRaiderIoCredentialService _raiderIoCredentialsService = raiderIoCredentialService;
     private readonly IScoringSettingsRepository _scoringSettingsRepository = scoringSettingsRepository;
     private readonly IAuditService _audit = audit;
 
@@ -88,7 +90,7 @@ public class AdminController(
             return BadRequest(new { error = "ClientSecret is required." });
 
         await _bnetCredentialsService.SaveAsync(
-            request.ClientId.Trim(),
+            request.ClientId.Trim(),.
             request.ClientSecret.Trim(),
             request.Label?.Trim(),
             ct);
@@ -111,14 +113,64 @@ public class AdminController(
     {
         var configured = await _bnetCredentialsService.AreConfiguredAsync(ct);
 
-        return Ok(new BNetCredentialStatusResponse(
+        return Ok(new BNetCredentialStatusResponse( bnet_integration
+                ? "Battle.net credentials are configured."
+                : "Battle.net credentials have not been set. Call PUT /api/admin/bnet-credentials."
+        ));
+    }
+
+    [HttpPut("raider-io-key")]
+    [ProducesResponseType(typeof(RaiderIoKeyStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpsertRaiderIoKey(
+        [FromBody] RaiderIoKeyRequest request,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ApiKey))
+            return BadRequest(new { error = "ApiKey is required." });
+
+        await _raiderIoCredentialsService.SaveAsync(
+            request.ApiKey.Trim(),
+            request.Label?.Trim(),
+            ct);
+
+        await _audit.LogAsync("RaiderIoKey.Updated", "RaiderIoCredential",
+            actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
+
+        return Ok(new RaiderIoKeyStatusResponse(
+            Configured: true,
+            Label: request.Label?.Trim(),
+            UpdatedAt: DateTime.UtcNow,
+            Message: "Raider.IO API key saved successfully. Key is stored encrypted (AES-256-GCM)."
+        ));
+    }
+
+    [HttpGet("raider-io-key/status")]
+    [ProducesResponseType(typeof(RaiderIoKeyStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRaiderIoKeyStatus(CancellationToken ct)
+    {
+        var configured = await _raiderIoCredentialsService.IsConfiguredAsync(ct);
+
+        return Ok(new RaiderIoKeyStatusResponse(
             Configured: configured,
             Label: null,
             UpdatedAt: null,
             Message: configured
-                ? "Battle.net credentials are configured."
-                : "Battle.net credentials have not been set. Call PUT /api/admin/bnet-credentials."
+                ? "Raider.IO API key is configured."
+                : "Raider.IO API key has not been set. Requests will use the public rate limit (200 req/min). Call PUT /api/admin/raider-io-key to configure."
         ));
+    }
+
+    [HttpDelete("raider-io-key")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteRaiderIoKey(CancellationToken ct)
+    {
+        await _raiderIoCredentialsService.DeleteAsync(ct);
+
+        await _audit.LogAsync("RaiderIoKey.Deleted", "RaiderIoCredential",
+            actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
+
+        return NoContent();
     }
 
 

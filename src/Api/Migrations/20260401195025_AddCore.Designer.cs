@@ -3,6 +3,7 @@ using System;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GuildManagerApi.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260401195025_AddCore")]
+    partial class AddCore
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -124,88 +127,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasIndex("OccurredAt");
 
                     b.ToTable("audit_logs", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.BattleNetCredential", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    b.Property<byte[]>("ClientIdEncrypted")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("client_id_encrypted");
-
-                    b.Property<byte[]>("ClientSecretEncrypted")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("client_secret_encrypted");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("label");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("bnet_credentials", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.BattleNetUserToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AccessToken")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("access_token");
-
-                    b.Property<string>("BattleTag")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("battle_tag");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTime?>("LastRefreshedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_refreshed_at");
-
-                    b.Property<string>("Sub")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("sub");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("bnet_user_tokens", (string)null);
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Character", b =>
@@ -1279,17 +1200,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.ToTable("wcl_user_tokens", (string)null);
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.BattleNetUserToken", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.AppUser", "User")
-                        .WithOne("BattleNetToken")
-                        .HasForeignKey("GuildManagerApi.Domain.Entities.BattleNetUserToken", "UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Character", b =>
                 {
                     b.HasOne("GuildManagerApi.Domain.Entities.Class", "Class")
@@ -1478,8 +1388,6 @@ namespace GuildManagerApi.Api.Migrations
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.AppUser", b =>
                 {
-                    b.Navigation("BattleNetToken");
-
                     b.Navigation("RefreshTokens");
 
                     b.Navigation("WclToken");

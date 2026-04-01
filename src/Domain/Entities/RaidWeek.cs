@@ -9,8 +9,9 @@ public class RaidWeek
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public DateTime EndsAt => StartsAt.AddDays(7);
+    public int? CoreId { get; set; }
 
-
-
+    // Navigation
+    public Core? Core { get; set; }
     public ICollection<RaidWeekReport> ReportEntries { get; set; } = [];
 }
