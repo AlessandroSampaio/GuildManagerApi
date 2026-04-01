@@ -16,6 +16,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
     public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
+    public DbSet<BattleNetUserToken> BattleNetUserTokens => Set<BattleNetUserToken>();
+    public DbSet<BattleNetCredential> BattleNetCredentials => Set<BattleNetCredential>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
     public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
@@ -472,6 +474,40 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasIndex(a => a.EntityType);
                 e.HasIndex(a => a.Action);
                 e.ToTable("audit_logs");
+            });
+
+        builder.Entity<BattleNetUserToken>(e =>
+            {
+                e.HasKey(t => t.Id);
+                e.Property(t => t.Id).HasColumnName("id");
+                e.Property(t => t.UserId).HasColumnName("user_id");
+                e.Property(t => t.AccessToken).HasColumnName("access_token").IsRequired();
+                e.Property(t => t.ExpiresAt).HasColumnName("expires_at");
+                e.Property(t => t.CreatedAt).HasColumnName("created_at");
+                e.Property(t => t.LastRefreshedAt).HasColumnName("last_refreshed_at");
+                e.Property(t => t.BattleTag).HasColumnName("battle_tag").HasMaxLength(64);
+                e.Property(t => t.Sub).HasColumnName("sub").HasMaxLength(32);
+                e.Ignore(t => t.IsExpired);
+                e.HasIndex(t => t.UserId).IsUnique(); // one token per user
+
+                e.HasOne(t => t.User)
+                .WithOne(u => u.BattleNetToken)
+                .HasForeignKey<BattleNetUserToken>(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("bnet_user_tokens");
+            });
+
+        builder.Entity<BattleNetCredential>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+                e.Property(c => c.ClientIdEncrypted).HasColumnName("client_id_encrypted").IsRequired();
+                e.Property(c => c.ClientSecretEncrypted).HasColumnName("client_secret_encrypted").IsRequired();
+                e.Property(c => c.Label).HasColumnName("label").HasMaxLength(128);
+                e.Property(c => c.CreatedAt).HasColumnName("created_at");
+                e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
+                e.ToTable("bnet_credentials");
             });
     }
 }

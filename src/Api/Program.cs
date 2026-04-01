@@ -22,6 +22,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<WclAuthOptions>(
     builder.Configuration.GetSection(WclAuthOptions.Section));
 
+builder.Services.Configure<BNetAuthOptions>(
+    builder.Configuration.GetSection(BNetAuthOptions.Section));
+
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.Section));
 
@@ -107,6 +110,10 @@ builder.Services.AddScoped<IWclTokenService, WclTokenService>();
 builder.Services.AddHttpClient<IWclTokenService, WclTokenService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
+builder.Services.AddScoped<IBNetTokenService, BattleNetTokenService>();
+builder.Services.AddHttpClient<IBNetTokenService, BattleNetTokenService>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
 builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
@@ -116,6 +123,7 @@ builder.Services.AddScoped<IGuildSyncService, GuildSyncService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
+builder.Services.AddScoped<IBattleNetCredentialService, BattleNetCredentialService>();
 builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository>();
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 builder.Services.AddScoped<IRaidWeekRepository, RaidWeekRepository>();
