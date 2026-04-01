@@ -3,6 +3,7 @@ using System;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GuildManagerApi.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260401164553_BattleNet_Auth_Flow")]
+    partial class BattleNet_Auth_Flow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -377,57 +380,6 @@ namespace GuildManagerApi.Api.Migrations
                         });
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.Core", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<int>("GuildId")
-                        .HasColumnType("integer")
-                        .HasColumnName("guild_id");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("name");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GuildId");
-
-                    b.ToTable("cores", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.CorePlayer", b =>
-                {
-                    b.Property<int>("CoreId")
-                        .HasColumnType("integer")
-                        .HasColumnName("core_id");
-
-                    b.Property<int>("PlayerId")
-                        .HasColumnType("integer")
-                        .HasColumnName("player_id");
-
-                    b.HasKey("CoreId", "PlayerId");
-
-                    b.HasIndex("PlayerId");
-
-                    b.ToTable("core_players", (string)null);
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Fight", b =>
                 {
                     b.Property<int>("Id")
@@ -664,10 +616,6 @@ namespace GuildManagerApi.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("CoreId")
-                        .HasColumnType("integer")
-                        .HasColumnName("core_id");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -685,8 +633,6 @@ namespace GuildManagerApi.Api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CoreId");
 
                     b.HasIndex("StartsAt")
                         .IsUnique();
@@ -722,35 +668,6 @@ namespace GuildManagerApi.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("raid_week_reports", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoCredential", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    b.Property<byte[]>("ApiKeyEncrypted")
-                        .IsRequired()
-                        .HasColumnType("bytea")
-                        .HasColumnName("api_key_encrypted");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("label");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("raider_io_credentials", (string)null);
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RefreshToken", b =>
@@ -1314,36 +1231,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.Navigation("Player");
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.Core", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.Guild", "Guild")
-                        .WithMany("Cores")
-                        .HasForeignKey("GuildId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Guild");
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.CorePlayer", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.Core", "Core")
-                        .WithMany("Players")
-                        .HasForeignKey("CoreId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GuildManagerApi.Domain.Entities.Player", "Player")
-                        .WithMany("CoreMemberships")
-                        .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Core");
-
-                    b.Navigation("Player");
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Fight", b =>
                 {
                     b.HasOne("GuildManagerApi.Domain.Entities.Report", "Report")
@@ -1399,16 +1286,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.Navigation("Player");
 
                     b.Navigation("RaidWeek");
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaidWeek", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.Core", "Core")
-                        .WithMany("RaidWeeks")
-                        .HasForeignKey("CoreId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Core");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaidWeekReport", b =>
@@ -1497,13 +1374,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.Navigation("Specializations");
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.Core", b =>
-                {
-                    b.Navigation("Players");
-
-                    b.Navigation("RaidWeeks");
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Fight", b =>
                 {
                     b.Navigation("PerformanceEntries");
@@ -1512,8 +1382,6 @@ namespace GuildManagerApi.Api.Migrations
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Guild", b =>
                 {
                     b.Navigation("Characters");
-
-                    b.Navigation("Cores");
 
                     b.Navigation("Reports");
                 });
@@ -1526,8 +1394,6 @@ namespace GuildManagerApi.Api.Migrations
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Player", b =>
                 {
                     b.Navigation("Characters");
-
-                    b.Navigation("CoreMemberships");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaidWeek", b =>

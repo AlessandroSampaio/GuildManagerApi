@@ -14,11 +14,13 @@ namespace GuildManagerApi.Api.Controllers;
 [Produces("application/json")]
 public class AdminController(
     IWclCredentialService credentialService,
+    IBattleNetCredentialService bnetCredentialService,
     IRaiderIoCredentialService raiderIoCredentialService,
     IScoringSettingsRepository scoringSettingsRepository,
     IAuditService audit) : ControllerBase
 {
     private readonly IWclCredentialService _credentialsService = credentialService;
+    private readonly IBattleNetCredentialService _bnetCredentialsService = bnetCredentialService;
     private readonly IRaiderIoCredentialService _raiderIoCredentialsService = raiderIoCredentialService;
     private readonly IScoringSettingsRepository _scoringSettingsRepository = scoringSettingsRepository;
     private readonly IAuditService _audit = audit;
@@ -69,6 +71,51 @@ public class AdminController(
             Message: configured
                 ? "WarcraftLogs credentials are configured."
                 : "WarcraftLogs credentials have not been set. Call PUT /api/admin/wcl-credentials."
+        ));
+    }
+
+    [HttpPut("bnet-credentials")]
+    [ProducesResponseType(typeof(BNetCredentialStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpsertBNetCredentials(
+        [FromBody] BNetCredentialRequest request,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ClientId))
+            return BadRequest(new { error = "ClientId is required." });
+
+        if (string.IsNullOrWhiteSpace(request.ClientSecret))
+            return BadRequest(new { error = "ClientSecret is required." });
+
+        await _bnetCredentialsService.SaveAsync(
+            request.ClientId.Trim(),.
+            request.ClientSecret.Trim(),
+            request.Label?.Trim(),
+            ct);
+
+        await _audit.LogAsync("BNetCredentials.Updated", "BattleNetCredential",
+            actorId: GetActorId(), actorUsername: GetActorUsername(), ct: ct);
+
+        return Ok(new BNetCredentialStatusResponse(
+            Configured: true,
+            Label: request.Label?.Trim(),
+            UpdatedAt: DateTime.UtcNow,
+            Message: "Battle.net credentials saved successfully. " +
+                     "ClientId and ClientSecret are stored encrypted (AES-256-GCM)."
+        ));
+    }
+
+    [HttpGet("bnet-credentials/status")]
+    [ProducesResponseType(typeof(BNetCredentialStatusResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBNetCredentialStatus(CancellationToken ct)
+    {
+        var configured = await _bnetCredentialsService.AreConfiguredAsync(ct);
+
+        return Ok(new BNetCredentialStatusResponse( bnet_integration
+                ? "Battle.net credentials are configured."
+                : "Battle.net credentials have not been set. Call PUT /api/admin/bnet-credentials."
         ));
     }
 
