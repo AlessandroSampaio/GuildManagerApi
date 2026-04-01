@@ -52,6 +52,18 @@ public interface IPerformanceRepository
 }
 
 
+public interface ICoreRepository
+{
+    Task<Core?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<IEnumerable<Core>> GetAllAsync(int page, int pageSize, CancellationToken ct = default);
+    Task<int> CountAsync(CancellationToken ct = default);
+    Task<int> CreateAsync(Core core, CancellationToken ct = default);
+    Task<bool> UpdateAsync(int id, string name, CancellationToken ct = default);
+    Task<bool> DeleteAsync(int id, CancellationToken ct = default);
+    Task<bool> AddPlayerAsync(int coreId, int playerId, CancellationToken ct = default);
+    Task<bool> RemovePlayerAsync(int coreId, int playerId, CancellationToken ct = default);
+}
+
 public interface IPlayerRepository
 {
     Task<Player?> GetByIdAsync(int id, CancellationToken ct = default);

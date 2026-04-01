@@ -124,6 +124,7 @@ builder.Services.AddScoped<IRaiderIoService, RaiderIoService>();
 builder.Services.AddHttpClient<IRaiderIoService, RaiderIoService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository>();
+builder.Services.AddScoped<ICoreRepository, CoreRepository>();
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 builder.Services.AddScoped<IRaidWeekRepository, RaidWeekRepository>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
