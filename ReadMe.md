@@ -412,6 +412,10 @@ Agrupa um conjunto de reports de uma **semana de raid** para facilitar o cálcul
 
 Evento de penalidade **reutilizável** com uma descrição e um valor fixo de pontos negativos. Exemplos: "Ausência não justificada (-20 pts)", "Morte evitável (-10 pts)". Cada evento pode ser aplicado a múltiplos players em diferentes semanas.
 
+### Core
+
+Grupo fixo de **players** associado a uma guilda. Pode ser vinculado a uma `RaidWeek` para restringir a participação àquele grupo naquela semana.
+
 ### PlayerScoring
 
 Sistema de pontuação que converte o `rankPercent` WarcraftLogs em pontos inteiros via **tiers configuráveis** (ex: 95–100% = 100 pts, 75–94% = 75 pts). As configurações de tiers são gerenciadas pelo endpoint Admin. Penalidades da semana são descontadas do total de performance.
@@ -451,6 +455,9 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 |--------|------|------|-----------|
 | `PUT` | `/api/admin/wcl-credentials` | ✅ Admin | Configura as credenciais WCL da aplicação (clientId + clientSecret) |
 | `GET` | `/api/admin/wcl-credentials/status` | ✅ Admin | Retorna o status das credenciais WCL configuradas |
+| `PUT` | `/api/admin/raider-io-key` | ✅ Admin | Configura a API Key do Raider.IO (opcional, criptografada) |
+| `GET` | `/api/admin/raider-io-key/status` | ✅ Admin | Retorna o status da API Key do Raider.IO configurada |
+| `DELETE` | `/api/admin/raider-io-key` | ✅ Admin | Remove a API Key do Raider.IO |
 | `GET` | `/api/admin/scoring-settings` | ✅ Admin | Retorna as configurações de pontuação por tiers |
 | `PUT` | `/api/admin/scoring-settings` | ✅ Admin | Atualiza as configurações de tiers de pontuação |
 | `DELETE` | `/api/admin/scoring-settings` | ✅ Admin | Remove as configurações de pontuação |
@@ -498,6 +505,7 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
 | `GET` | `/api/characters/{id}` | ✅ | Retorna detalhes de um personagem com histórico de performance |
+| `GET` | `/api/characters/{id}/raider-io/profile` | ✅ | Redireciona (302) para o perfil Raider.IO do personagem usando os dados locais |
 | `GET` | `/api/characters/search` | ✅ | Busca characters por nome (substring) e/ou classe, paginado. Retorna o player vinculado se houver |
 
 #### Parâmetros de `/api/characters/search`
@@ -563,6 +571,36 @@ fases emitidas: Started → FetchingPage (×N páginas) → SavingCharacters (×
 
 > A operação é **idempotente** — rodar múltiplas vezes não duplica personagens.
 > Membros com `gameData.error` são ignorados e contabilizados em `data.skipped`.
+
+### Cores
+
+Um **Core** é um grupo fixo de players associado a uma guilda. Quando vinculado a uma `RaidWeek`, apenas os players do core participam daquela semana de raid.
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/cores` | ✅ | Lista todos os cores paginado |
+| `POST` | `/api/cores` | ✅ | Cria um novo core associado a uma guilda |
+| `GET` | `/api/cores/{id}` | ✅ | Retorna detalhes de um core com seus players |
+| `PUT` | `/api/cores/{id}` | ✅ | Atualiza o nome de um core |
+| `DELETE` | `/api/cores/{id}` | ✅ | Remove um core |
+| `POST` | `/api/cores/{id}/players/{playerId}` | ✅ | Adiciona um player ao core |
+| `DELETE` | `/api/cores/{id}/players/{playerId}` | ✅ | Remove um player do core |
+
+### Raider.IO
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/raider-io/characters/profile` | ✅ | Proxy para o perfil Raider.IO — retorna `mythic_plus_best_runs:all` e `raid_progression` |
+
+#### Parâmetros de `/api/raider-io/characters/profile`
+
+| Param | Tipo | Descrição |
+|-------|------|-----------|
+| `region` | string | Região do servidor (ex: `us`, `eu`) |
+| `realm` | string | Realm do personagem (ex: `Azralon`) |
+| `name` | string | Nome do personagem |
+
+> O campo `fields` é fixo em `mythic_plus_best_runs:all,raid_progression`. Se uma API Key estiver configurada no Admin, ela é injetada automaticamente na requisição.
 
 ### Players
 
