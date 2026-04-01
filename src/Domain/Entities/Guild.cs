@@ -12,4 +12,5 @@ public class Guild
     // Navigation
     public ICollection<Report> Reports { get; set; } = [];
     public ICollection<Character> Characters { get; set; } = [];
+    public ICollection<Core> Cores { get; set; } = [];
 }

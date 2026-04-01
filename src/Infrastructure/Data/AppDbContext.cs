@@ -20,6 +20,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Player> Players => Set<Player>();
     public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
     public DbSet<ScoringTier> ScoringTiers => Set<ScoringTier>();
+    public DbSet<Core> Cores => Set<Core>();
+    public DbSet<CorePlayer> CorePlayers => Set<CorePlayer>();
     public DbSet<RaidWeek> RaidWeeks => Set<RaidWeek>();
     public DbSet<RaidWeekReport> RaidWeekReports => Set<RaidWeekReport>();
     public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
@@ -393,15 +395,59 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.ToTable("scoring_tiers");
             });
 
+        builder.Entity<Core>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasColumnName("id");
+                e.Property(c => c.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+                e.Property(c => c.GuildId).HasColumnName("guild_id");
+                e.Property(c => c.CreatedAt).HasColumnName("created_at");
+                e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
+
+                e.HasOne(c => c.Guild)
+                    .WithMany(g => g.Cores)
+                    .HasForeignKey(c => c.GuildId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("cores");
+            });
+
+        builder.Entity<CorePlayer>(e =>
+            {
+                e.HasKey(cp => new { cp.CoreId, cp.PlayerId });
+                e.Property(cp => cp.CoreId).HasColumnName("core_id");
+                e.Property(cp => cp.PlayerId).HasColumnName("player_id");
+
+                e.HasOne(cp => cp.Core)
+                    .WithMany(c => c.Players)
+                    .HasForeignKey(cp => cp.CoreId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(cp => cp.Player)
+                    .WithMany(p => p.CoreMemberships)
+                    .HasForeignKey(cp => cp.PlayerId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("core_players");
+            });
+
         builder.Entity<RaidWeek>(e =>
             {
                 e.HasKey(w => w.Id);
                 e.Property(w => w.Id).HasColumnName("id");
                 e.Property(w => w.Label).HasColumnName("label").HasMaxLength(128).IsRequired();
                 e.Property(w => w.StartsAt).HasColumnName("starts_at");
+                e.Property(w => w.CoreId).HasColumnName("core_id");
                 // StartsAt deve ser sempre uma terça-feira — validado no controller
                 e.HasIndex(w => w.StartsAt).IsUnique();
                 e.Ignore(w => w.EndsAt);                // propriedade calculada
+
+                e.HasOne(w => w.Core)
+                    .WithMany(c => c.RaidWeeks)
+                    .HasForeignKey(w => w.CoreId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
                 e.ToTable("raid_weeks");
             });
 
