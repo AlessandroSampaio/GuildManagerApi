@@ -20,7 +20,7 @@ public class BNetAuthOptions
     /// <summary>Escopos necessários. wow.profile para dados de WoW; openid para obter battletag via userinfo.</summary>
     public string Scope { get; set; } = "wow.profile openid";
     /// <summary>URI de callback registrada no painel do Battle.net developer portal.</summary>
-    public string RedirectUri { get; set; } = "http://localhost:5173/api/bnet-auth/callback";
+    public string RedirectUri { get; set; } = "http://localhost:5173/api/profile/bnet/callback";
     public string FrontendCallbackUrl { get; set; } = "http://localhost:1420";
 }
 

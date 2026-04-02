@@ -90,7 +90,7 @@ public class AdminController(
             return BadRequest(new { error = "ClientSecret is required." });
 
         await _bnetCredentialsService.SaveAsync(
-            request.ClientId.Trim(),.
+            request.ClientId.Trim(),
             request.ClientSecret.Trim(),
             request.Label?.Trim(),
             ct);
@@ -113,7 +113,11 @@ public class AdminController(
     {
         var configured = await _bnetCredentialsService.AreConfiguredAsync(ct);
 
-        return Ok(new BNetCredentialStatusResponse( bnet_integration
+        return Ok(new BNetCredentialStatusResponse(
+            Configured: configured,
+            Label: null,
+            UpdatedAt: null,
+            Message: configured
                 ? "Battle.net credentials are configured."
                 : "Battle.net credentials have not been set. Call PUT /api/admin/bnet-credentials."
         ));

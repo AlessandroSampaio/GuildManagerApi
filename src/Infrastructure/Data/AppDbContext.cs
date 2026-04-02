@@ -555,6 +555,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(c => c.CreatedAt).HasColumnName("created_at");
                 e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
                 e.ToTable("bnet_credentials");
+            });
+
         builder.Entity<RaiderIoCredential>(e =>
             {
                 e.HasKey(c => c.Id);

@@ -11,9 +11,10 @@ using Microsoft.Extensions.Options;
 namespace GuildManagerApi.Api.Controllers;
 
 [ApiController]
-[Route("api/bnet-auth")]
+[Route("api/profile")]
+[Authorize]
 [Produces("application/json")]
-public class BattleNetAuthController(
+public class ProfileController(
     IBNetTokenService bnetTokenService,
     IMemoryCache cache,
     IOptions<BNetAuthOptions> opts,
@@ -29,10 +30,10 @@ public class BattleNetAuthController(
     /// Inicia o fluxo OAuth Battle.net: retorna a URL de autorização.
     /// O usuário deve abrir essa URL no browser para conceder acesso.
     /// </summary>
-    [HttpGet("authorize")]
-    [Authorize]
+    [HttpGet("bnet/authorize")]
     [ProducesResponseType(typeof(BNetAuthorizeResponseDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Authorize(CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> BNetAuthorize(CancellationToken ct)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
@@ -48,9 +49,10 @@ public class BattleNetAuthController(
     /// <summary>
     /// Callback do fluxo OAuth Battle.net. Troca o code pelo access token e busca o BattleTag.
     /// </summary>
-    [HttpGet("callback")]
+    [HttpGet("bnet/callback")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status302Found)]
-    public async Task<IActionResult> Callback(
+    public async Task<IActionResult> BNetCallback(
         [FromQuery] string code,
         [FromQuery] string state,
         [FromQuery] string? error = null,
@@ -88,10 +90,10 @@ public class BattleNetAuthController(
     /// <summary>
     /// Retorna o status de autorização Battle.net do usuário autenticado, incluindo BattleTag se disponível.
     /// </summary>
-    [HttpGet("status")]
-    [Authorize]
+    [HttpGet("bnet/status")]
     [ProducesResponseType(typeof(BNetStatusDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Status(CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> BNetStatus(CancellationToken ct)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
@@ -106,16 +108,16 @@ public class BattleNetAuthController(
             token?.BattleTag,
             authorized
                 ? "Battle.net access is active."
-                : "Not authorized. Call GET /api/bnet-auth/authorize."));
+                : "Not authorized. Call GET /api/profile/bnet/authorize."));
     }
 
     /// <summary>
     /// Remove o token Battle.net do usuário autenticado.
     /// </summary>
-    [HttpDelete("revoke")]
-    [Authorize]
+    [HttpDelete("bnet/revoke")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> Revoke(CancellationToken ct)
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> BNetRevoke(CancellationToken ct)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
@@ -123,7 +125,6 @@ public class BattleNetAuthController(
         await _bnetTokenService.RevokeUserTokenAsync(userId.Value, ct);
         return NoContent();
     }
-
 
     private RedirectResult RedirectToFrontend(string baseUrl, bool success, string message)
     {
