@@ -25,3 +25,9 @@ public record BNetCredentialStatusResponse(
     DateTime? UpdatedAt,
     string Message
 );
+
+public record LinkCharactersResponseDto(
+    int LinkedCount,
+    IReadOnlyList<string> LinkedCharacters,
+    string Message
+);

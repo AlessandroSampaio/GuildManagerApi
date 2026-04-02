@@ -44,6 +44,9 @@ public interface IBNetTokenService
 
     /// <summary>Remove o token Battle.net do usuário.</summary>
     Task RevokeUserTokenAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Busca todos os personagens WoW vinculados à conta Battle.net do usuário via /profile/user/wow.</summary>
+    Task<IReadOnlyList<long>> FetchWowCharacterIdsAsync(Guid userId, CancellationToken ct = default);
 }
 
 public partial class BattleNetTokenService(
@@ -195,6 +198,39 @@ public partial class BattleNetTokenService(
         await _db.SaveChangesAsync(ct);
     }
 
+
+    public async Task<IReadOnlyList<long>> FetchWowCharacterIdsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var accessToken = await GetUserTokenAsync(userId, ct);
+
+        const string url = "https://us.api.blizzard.com/profile/user/wow?namespace=profile-us&locale=en_US";
+        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var res = await _httpClient.SendAsync(req, ct);
+        res.EnsureSuccessStatusCode();
+
+        var json = await res.Content.ReadAsStringAsync(ct);
+        var doc = JsonDocument.Parse(json);
+
+        var ids = new List<long>();
+        if (!doc.RootElement.TryGetProperty("wow_accounts", out var accounts))
+            return ids;
+
+        foreach (var account in accounts.EnumerateArray())
+        {
+            if (!account.TryGetProperty("characters", out var characters))
+                continue;
+
+            foreach (var character in characters.EnumerateArray())
+            {
+                if (character.TryGetProperty("id", out var idProp))
+                    ids.Add(idProp.GetInt64());
+            }
+        }
+
+        return ids;
+    }
 
     // Helpers
     private async Task<string> BuildBasicCredentialsAsync(CancellationToken ct)

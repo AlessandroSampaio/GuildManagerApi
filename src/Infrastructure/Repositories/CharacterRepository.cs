@@ -13,6 +13,14 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
     public Task<Character?> FindByWclActorAsync(long wclActorId, string server, CancellationToken ct = default)
         => _context.Characters.FirstOrDefaultAsync(c => c.WclActorId == wclActorId && c.Server.Equals(server), ct);
 
+    public async Task<IEnumerable<Character>> FindByWclActorIdsAsync(IEnumerable<long> wclActorIds, CancellationToken ct = default)
+    {
+        var ids = wclActorIds.ToList();
+        return await _context.Characters
+            .Where(c => ids.Contains(c.WclActorId))
+            .ToListAsync(ct);
+    }
+
     public async Task<IEnumerable<Character>> GetByGuildAsync(int guildId, CancellationToken ct = default)
         => await _context.Characters
                     .Include(c => c.Class)

@@ -20,6 +20,7 @@ public interface ICharacterRepository
 {
     Task<Character?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<Character?> FindByWclActorAsync(long wclActorId, string server, CancellationToken ct = default);
+    Task<IEnumerable<Character>> FindByWclActorIdsAsync(IEnumerable<long> wclActorIds, CancellationToken ct = default);
     Task<IEnumerable<Character>> GetByGuildAsync(int guildId, CancellationToken ct = default);
     Task<int> UpsertAsync(Character character, CancellationToken ct = default);
     Task<IEnumerable<Class>> GetClassesAsync(CancellationToken ct = default);

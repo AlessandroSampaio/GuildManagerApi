@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
+using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Auth;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -16,11 +17,13 @@ namespace GuildManagerApi.Api.Controllers;
 [Produces("application/json")]
 public class ProfileController(
     IBNetTokenService bnetTokenService,
+    ICharacterRepository characterRepository,
     IMemoryCache cache,
     IOptions<BNetAuthOptions> opts,
     AppDbContext db) : ControllerBase
 {
     private readonly IBNetTokenService _bnetTokenService = bnetTokenService;
+    private readonly ICharacterRepository _characterRepository = characterRepository;
     private readonly IMemoryCache _cache = cache;
     private const string StatePrefix = "bnet_oauth_state:";
     private readonly BNetAuthOptions _opts = opts.Value;
@@ -124,6 +127,54 @@ public class ProfileController(
 
         await _bnetTokenService.RevokeUserTokenAsync(userId.Value, ct);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Busca os personagens WoW da conta Battle.net do usuário e vincula os que correspondem a Characters existentes
+    /// (via WclActorId == BNet character id) ao Player do usuário.
+    /// </summary>
+    [HttpPost("bnet/link-characters")]
+    [ProducesResponseType(typeof(LinkCharactersResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> LinkBNetCharacters(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var player = await _db.Players.FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
+        if (player is null)
+            return NotFound("No player associated with this account.");
+
+        IReadOnlyList<long> bnetCharacterIds;
+        try
+        {
+            bnetCharacterIds = await _bnetTokenService.FetchWowCharacterIdsAsync(userId.Value, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        if (bnetCharacterIds.Count == 0)
+            return Ok(new LinkCharactersResponseDto(0, [], "No WoW characters found on this Battle.net account."));
+
+        var matchedCharacters = (await _characterRepository.FindByWclActorIdsAsync(bnetCharacterIds, ct))
+            .Where(c => c.PlayerId is null)
+            .ToList();
+
+        foreach (var character in matchedCharacters)
+            character.PlayerId = player.Id;
+
+        await _db.SaveChangesAsync(ct);
+
+        var names = matchedCharacters.Select(c => c.Name).ToList();
+        return Ok(new LinkCharactersResponseDto(
+            names.Count,
+            names,
+            names.Count > 0
+                ? $"Successfully linked {names.Count} character(s) to player '{player.Name}'."
+                : "No new characters to link. All matching characters are already linked."));
     }
 
     private RedirectResult RedirectToFrontend(string baseUrl, bool success, string message)
