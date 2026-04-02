@@ -358,7 +358,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasKey(p => p.Id);
                 e.Property(p => p.Id).HasColumnName("id");
                 e.Property(p => p.Name).HasColumnName("name").HasMaxLength(64).IsRequired();
+                e.Property(p => p.AppUserId).HasColumnName("app_user_id");
                 e.HasIndex(p => p.Name);
+                e.HasIndex(p => p.AppUserId).IsUnique();
+
+                e.HasOne(p => p.AppUser)
+                    .WithOne(u => u.Player)
+                    .HasForeignKey<Player>(p => p.AppUserId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
                 e.ToTable("players");
             });
 
