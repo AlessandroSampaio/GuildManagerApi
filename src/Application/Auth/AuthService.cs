@@ -85,12 +85,14 @@ public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOpt
         if (await _users.ExistsAsync(request.Username, request.Email, ct))
             throw new InvalidOperationException("Username or Email already in user");
 
+        var now = DateTime.UtcNow;
         var user = new AppUser
         {
             Username = request.Username.Trim(),
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             Role = AppUserRole.Guest,
+            Player = new Player { Name = request.Username.Trim(), CreatedAt = now, UpdatedAt = now },
         };
 
 
