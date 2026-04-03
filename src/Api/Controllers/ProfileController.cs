@@ -130,6 +130,44 @@ public class ProfileController(
     }
 
     /// <summary>
+    /// Retorna todos os personagens vinculados ao Player do usuário autenticado.
+    /// </summary>
+    [HttpGet("characters")]
+    [ProducesResponseType(typeof(IEnumerable<CharacterDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCharacters(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var player = await _db.Players
+            .Include(p => p.Characters)
+                .ThenInclude(c => c.Class)
+            .Include(p => p.Characters)
+                .ThenInclude(c => c.Guild)
+            .FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
+
+        if (player is null)
+            return NotFound("No player associated with this account.");
+
+        var bnetLinked = await _db.BattleNetUserTokens.AnyAsync(t => t.UserId == userId.Value, ct);
+        if (!bnetLinked)
+            return BadRequest("Battle.net account not linked. Call GET /api/profile/bnet/authorize first.");
+
+        var characters = player.Characters.Select(c => new CharacterDto(
+            c.Id,
+            c.Name,
+            c.Server,
+            c.Class?.Name ?? "Unknown",
+            c.Guild?.Name
+        ));
+
+        return Ok(characters);
+    }
+
+    /// <summary>
     /// Busca os personagens WoW da conta Battle.net do usuário e vincula os que correspondem a Characters existentes
     /// (via WclActorId == BNet character id) ao Player do usuário.
     /// </summary>
