@@ -131,22 +131,40 @@ public class ProfileController(
 
     /// <summary>
     /// Retorna todos os personagens vinculados ao Player do usuário autenticado.
+    /// Passe includeRaiderIo=true para incluir o snapshot do Raider.IO de cada personagem.
     /// </summary>
     [HttpGet("characters")]
     [ProducesResponseType(typeof(IEnumerable<CharacterDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCharacters(CancellationToken ct)
+    public async Task<IActionResult> GetCharacters(
+        [FromQuery] bool includeRaiderIo = false,
+        CancellationToken ct = default)
     {
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
-        var player = await _db.Players
+        var baseQuery = _db.Players
             .Include(p => p.Characters)
                 .ThenInclude(c => c.Class)
             .Include(p => p.Characters)
-                .ThenInclude(c => c.Guild)
+                .ThenInclude(c => c.Guild);
+
+        IQueryable<GuildManagerApi.Domain.Entities.Player> playerQuery = baseQuery;
+
+        if (includeRaiderIo)
+            playerQuery = _db.Players
+                .Include(p => p.Characters)
+                    .ThenInclude(c => c.Class)
+                .Include(p => p.Characters)
+                    .ThenInclude(c => c.Guild)
+                .Include(p => p.Characters)
+                    .ThenInclude(c => c.RaiderIoSnapshot!)
+                        .ThenInclude(s => s.MythicRuns)
+                            .ThenInclude(r => r.Affixes);
+
+        var player = await playerQuery
             .FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
 
         if (player is null)
@@ -161,11 +179,33 @@ public class ProfileController(
             c.Name,
             c.Server,
             c.Class?.Name ?? "Unknown",
-            c.Guild?.Name
+            c.Guild?.Name,
+            includeRaiderIo && c.RaiderIoSnapshot is not null
+                ? MapSnapshot(c.RaiderIoSnapshot)
+                : null
         ));
 
         return Ok(characters);
     }
+
+    private static RaiderIoSnapshotDto MapSnapshot(GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot s) =>
+        new(
+            s.ThumbnailUrl,
+            s.LastCrawledAt,
+            s.CachedAt,
+            s.MythicRuns.Sum(r => r.Score),
+            [..s.MythicRuns.Select(r => new RaiderIoMythicRunDto(
+                r.KeystoneRunId,
+                r.Dungeon,
+                r.ShortName,
+                r.MythicLevel,
+                r.CompletedAt,
+                r.Score,
+                r.IconUrl,
+                r.BackgroundImageUrl,
+                [..r.Affixes.Select(a => new RaiderIoAffixDto(a.AffixId, a.Name, a.IconUrl))]
+            ))]
+        );
 
     /// <summary>
     /// Busca os personagens WoW da conta Battle.net do usuário e vincula os que correspondem a Characters existentes
