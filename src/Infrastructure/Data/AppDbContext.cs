@@ -29,6 +29,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
     public DbSet<PlayerWeekPenalty> PlayerWeekPenalties => Set<PlayerWeekPenalty>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<RaiderIoCharacterSnapshot> RaiderIoCharacterSnapshots => Set<RaiderIoCharacterSnapshot>();
+    public DbSet<RaiderIoMythicRun> RaiderIoMythicRuns => Set<RaiderIoMythicRun>();
+    public DbSet<RaiderIoRunAffix> RaiderIoRunAffixes => Set<RaiderIoRunAffix>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -575,6 +578,71 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(c => c.CreatedAt).HasColumnName("created_at");
                 e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
                 e.ToTable("raider_io_credentials");
+            });
+
+        builder.Entity<RaiderIoCharacterSnapshot>(e =>
+            {
+                e.HasKey(s => s.Id);
+                e.Property(s => s.Id).HasColumnName("id");
+                e.Property(s => s.Name).HasColumnName("name").HasMaxLength(50).IsRequired();
+                e.Property(s => s.Realm).HasColumnName("realm").HasMaxLength(100).IsRequired();
+                e.Property(s => s.Region).HasColumnName("region").HasMaxLength(10).IsRequired();
+                e.Property(s => s.ThumbnailUrl).HasColumnName("thumbnail_url").HasMaxLength(512);
+                e.Property(s => s.LastCrawledAt).HasColumnName("last_crawled_at");
+                e.Property(s => s.CachedAt).HasColumnName("cached_at");
+                e.Property(s => s.CharacterId).HasColumnName("character_id");
+                e.HasIndex(s => new { s.Name, s.Realm, s.Region }).IsUnique();
+                e.HasIndex(s => s.CharacterId);
+
+                e.HasOne(s => s.Character)
+                    .WithOne(c => c.RaiderIoSnapshot)
+                    .HasForeignKey<RaiderIoCharacterSnapshot>(s => s.CharacterId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
+                e.ToTable("raiderio_character_snapshots");
+            });
+
+        builder.Entity<RaiderIoMythicRun>(e =>
+            {
+                e.HasKey(r => r.Id);
+                e.Property(r => r.Id).HasColumnName("id");
+                e.Property(r => r.SnapshotId).HasColumnName("snapshot_id");
+                e.Property(r => r.KeystoneRunId).HasColumnName("keystone_run_id");
+                e.Property(r => r.Dungeon).HasColumnName("dungeon").HasMaxLength(128).IsRequired();
+                e.Property(r => r.ShortName).HasColumnName("short_name").HasMaxLength(16);
+                e.Property(r => r.MythicLevel).HasColumnName("mythic_level");
+                e.Property(r => r.CompletedAt).HasColumnName("completed_at");
+                e.Property(r => r.Score).HasColumnName("score");
+                e.Property(r => r.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
+                e.Property(r => r.BackgroundImageUrl).HasColumnName("background_image_url").HasMaxLength(512);
+                e.HasIndex(r => r.KeystoneRunId).IsUnique();
+                e.HasIndex(r => r.SnapshotId);
+
+                e.HasOne(r => r.Snapshot)
+                    .WithMany(s => s.MythicRuns)
+                    .HasForeignKey(r => r.SnapshotId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("raiderio_mythic_runs");
+            });
+
+        builder.Entity<RaiderIoRunAffix>(e =>
+            {
+                e.HasKey(a => a.Id);
+                e.Property(a => a.Id).HasColumnName("id");
+                e.Property(a => a.MythicRunId).HasColumnName("mythic_run_id");
+                e.Property(a => a.AffixId).HasColumnName("affix_id");
+                e.Property(a => a.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+                e.Property(a => a.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
+                e.HasIndex(a => new { a.MythicRunId, a.AffixId }).IsUnique();
+
+                e.HasOne(a => a.MythicRun)
+                    .WithMany(r => r.Affixes)
+                    .HasForeignKey(a => a.MythicRunId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("raiderio_run_affixes");
             });
     }
 }

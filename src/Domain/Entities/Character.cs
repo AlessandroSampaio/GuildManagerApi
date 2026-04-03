@@ -18,5 +18,6 @@ public class Character
     public virtual Guild? Guild { get; set; }
     public virtual Player? Player { get; set; }
     public ICollection<PerformanceEntry>? PerformanceEntries { get; set; } = [];
+    public virtual RaiderIoCharacterSnapshot? RaiderIoSnapshot { get; set; }
 
 }

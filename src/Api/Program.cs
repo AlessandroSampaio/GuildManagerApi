@@ -127,6 +127,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
 builder.Services.AddScoped<IBattleNetCredentialService, BattleNetCredentialService>();
 builder.Services.AddScoped<IRaiderIoCredentialService, RaiderIoCredentialService>();
+builder.Services.AddScoped<IRaiderIoProfileRepository, RaiderIoProfileRepository>();
 builder.Services.AddScoped<IRaiderIoService, RaiderIoService>();
 builder.Services.AddHttpClient<IRaiderIoService, RaiderIoService>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
