@@ -629,20 +629,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         builder.Entity<RaiderIoRunAffix>(e =>
             {
-                e.HasKey(a => a.Id);
-                e.Property(a => a.Id).HasColumnName("id");
-                e.Property(a => a.MythicRunId).HasColumnName("mythic_run_id");
-                e.Property(a => a.AffixId).HasColumnName("affix_id");
+                e.HasKey(a => a.AffixId);
+                e.Property(a => a.AffixId).HasColumnName("affix_id").ValueGeneratedNever();
                 e.Property(a => a.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
                 e.Property(a => a.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
-                e.HasIndex(a => new { a.MythicRunId, a.AffixId }).IsUnique();
-
-                e.HasOne(a => a.MythicRun)
-                    .WithMany(r => r.Affixes)
-                    .HasForeignKey(a => a.MythicRunId)
-                    .OnDelete(DeleteBehavior.Cascade);
 
                 e.ToTable("raiderio_run_affixes");
             });
+
+        builder.Entity<RaiderIoMythicRun>()
+            .HasMany(r => r.Affixes)
+            .WithMany(a => a.MythicRuns)
+            .UsingEntity(j => j.ToTable("raiderio_run_affix_links"));
     }
 }

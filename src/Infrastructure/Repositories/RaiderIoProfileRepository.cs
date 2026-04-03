@@ -17,13 +17,11 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
 
         var existing = await _context.RaiderIoCharacterSnapshots
             .Include(s => s.MythicRuns)
-                .ThenInclude(r => r.Affixes)
             .FirstOrDefaultAsync(s =>
                 s.Name == nameLower &&
                 s.Realm == realmLower &&
                 s.Region == regionLower, ct);
 
-        // Try to resolve the linked Character
         var character = await _context.Characters.FirstOrDefaultAsync(c =>
             c.Name.ToLower() == nameLower &&
             c.Server.ToLower() == realmLower &&
@@ -39,61 +37,57 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
             };
             _context.RaiderIoCharacterSnapshots.Add(existing);
         }
+        else
+        {
+            // Full replacement: delete all existing runs (join table entries cascade)
+            _context.RaiderIoMythicRuns.RemoveRange(existing.MythicRuns);
+            existing.MythicRuns.Clear();
+        }
 
         existing.ThumbnailUrl = snapshot.ThumbnailUrl;
         existing.LastCrawledAt = snapshot.LastCrawledAt;
         existing.CachedAt = snapshot.CachedAt;
         existing.CharacterId = character?.Id;
 
-        // Flush snapshot so it gets an Id before upserting runs
         await _context.SaveChangesAsync(ct);
+
+        // Load all known affixes once; only insert new ones
+        var knownAffixes = await _context.RaiderIoRunAffixes
+            .ToDictionaryAsync(a => a.AffixId, ct);
 
         foreach (var run in snapshot.MythicRuns)
         {
-            var existingRun = existing.MythicRuns
-                .FirstOrDefault(r => r.KeystoneRunId == run.KeystoneRunId);
-
-            if (existingRun is null)
+            var newRun = new RaiderIoMythicRun
             {
-                existingRun = new RaiderIoMythicRun
-                {
-                    SnapshotId = existing.Id,
-                    KeystoneRunId = run.KeystoneRunId,
-                };
-                _context.RaiderIoMythicRuns.Add(existingRun);
-                existing.MythicRuns.Add(existingRun);
-            }
-
-            existingRun.Dungeon = run.Dungeon;
-            existingRun.ShortName = run.ShortName;
-            existingRun.MythicLevel = run.MythicLevel;
-            existingRun.CompletedAt = run.CompletedAt;
-            existingRun.Score = run.Score;
-            existingRun.IconUrl = run.IconUrl;
-            existingRun.BackgroundImageUrl = run.BackgroundImageUrl;
-
-            // Flush run to get its Id before upserting affixes
-            await _context.SaveChangesAsync(ct);
+                SnapshotId = existing.Id,
+                KeystoneRunId = run.KeystoneRunId,
+                Dungeon = run.Dungeon,
+                ShortName = run.ShortName,
+                MythicLevel = run.MythicLevel,
+                CompletedAt = run.CompletedAt,
+                Score = run.Score,
+                IconUrl = run.IconUrl,
+                BackgroundImageUrl = run.BackgroundImageUrl,
+            };
 
             foreach (var affix in run.Affixes)
             {
-                var existingAffix = existingRun.Affixes
-                    .FirstOrDefault(a => a.AffixId == affix.AffixId);
-
-                if (existingAffix is null)
+                if (!knownAffixes.TryGetValue(affix.AffixId, out var affixEntity))
                 {
-                    existingAffix = new RaiderIoRunAffix
+                    affixEntity = new RaiderIoRunAffix
                     {
-                        MythicRunId = existingRun.Id,
                         AffixId = affix.AffixId,
+                        Name = affix.Name,
+                        IconUrl = affix.IconUrl,
                     };
-                    _context.RaiderIoRunAffixes.Add(existingAffix);
-                    existingRun.Affixes.Add(existingAffix);
+                    _context.RaiderIoRunAffixes.Add(affixEntity);
+                    knownAffixes[affix.AffixId] = affixEntity;
                 }
 
-                existingAffix.Name = affix.Name;
-                existingAffix.IconUrl = affix.IconUrl;
+                newRun.Affixes.Add(affixEntity);
             }
+
+            existing.MythicRuns.Add(newRun);
         }
 
         await _context.SaveChangesAsync(ct);
