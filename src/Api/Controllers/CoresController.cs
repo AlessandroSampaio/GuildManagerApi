@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using GuildManagerApi.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GuildManagerApi.Application.DTOs;
@@ -13,11 +15,15 @@ namespace GuildManagerApi.Api.Controllers;
 public class CoresController(
     ICoreRepository cores,
     IGuildRepository guilds,
-    IPlayerRepository players) : ControllerBase
+    IPlayerRepository players,
+    IRaiderIoSyncQueue raiderIoSyncQueue,
+    RaiderIoSyncHub raiderIoSyncHub) : ControllerBase
 {
     private readonly ICoreRepository _cores = cores;
     private readonly IGuildRepository _guilds = guilds;
     private readonly IPlayerRepository _players = players;
+    private readonly IRaiderIoSyncQueue _raiderIoSyncQueue = raiderIoSyncQueue;
+    private readonly RaiderIoSyncHub _raiderIoSyncHub = raiderIoSyncHub;
 
     /// <summary>
     /// Lista todos os cores paginados.
@@ -164,6 +170,57 @@ public class CoresController(
 
         var core = await _cores.GetByIdAsync(id, ct);
         return Ok(ToDetailDto(core!));
+    }
+
+    /// <summary>
+    /// Enfileira a sincronização Raider.IO para todos os personagens do core.
+    /// Conecte-se ao WebSocket em GET /api/cores/{id}/raider-io/sync/ws para acompanhar o progresso.
+    /// </summary>
+    [HttpPost("{id:int}/raider-io/sync")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> TriggerRaiderIoSync([FromRoute] int id, CancellationToken ct)
+    {
+        var core = await _cores.GetByIdAsync(id, ct);
+        if (core is null) return NotFound(new { error = $"Core {id} not found." });
+
+        await _raiderIoSyncQueue.EnqueueAsync(new RaiderIoSyncJob(id, GetUserId()), ct);
+
+        return Accepted(new
+        {
+            message = $"Raider.IO sync para o core \"{core.Name}\" enfileirado.",
+            wsUrl   = $"/api/cores/{id}/raider-io/sync/ws"
+        });
+    }
+
+    /// <summary>
+    /// WebSocket para receber eventos de progresso da sincronização Raider.IO do core.
+    /// </summary>
+    [HttpGet("{id:int}/raider-io/sync/ws")]
+    public async Task RaiderIoSyncProgressWebSocket([FromRoute] int id, CancellationToken ct)
+    {
+        if (!HttpContext.WebSockets.IsWebSocketRequest)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var core = await _cores.GetByIdAsync(id, ct);
+        if (core is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        _raiderIoSyncHub.Register(id, socket);
+        await _raiderIoSyncHub.WaitForCloseAsync(socket, ct);
+    }
+
+    private Guid? GetUserId()
+    {
+        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(sub, out var id) ? id : null;
     }
 
     private static CoreDetailDto ToDetailDto(Core core) =>

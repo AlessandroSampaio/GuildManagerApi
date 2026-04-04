@@ -56,6 +56,8 @@ public interface IPerformanceRepository
 public interface ICoreRepository
 {
     Task<Core?> GetByIdAsync(int id, CancellationToken ct = default);
+    Task<Core?> GetByIdWithCharactersAsync(int id, CancellationToken ct = default);
+    Task<IEnumerable<int>> GetAllCoreIdsAsync(CancellationToken ct = default);
     Task<IEnumerable<Core>> GetAllAsync(int page, int pageSize, CancellationToken ct = default);
     Task<int> CountAsync(CancellationToken ct = default);
     Task<int> CreateAsync(Core core, CancellationToken ct = default);

@@ -26,6 +26,8 @@ builder.Services.Configure<BNetAuthOptions>(
     builder.Configuration.GetSection(BNetAuthOptions.Section));
 builder.Services.Configure<RaiderIoOptions>(
     builder.Configuration.GetSection(RaiderIoOptions.Section));
+builder.Services.Configure<RaiderIoSyncOptions>(
+    builder.Configuration.GetSection(RaiderIoSyncOptions.Section));
 
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection(JwtOptions.Section));
@@ -122,6 +124,7 @@ builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
 // Application Services
 builder.Services.AddScoped<IImportReportService, ImportReportService>();
 builder.Services.AddScoped<IGuildSyncService, GuildSyncService>();
+builder.Services.AddScoped<IRaiderIoSyncService, RaiderIoSyncService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWclCredentialService, WclCredentialService>();
@@ -146,6 +149,8 @@ builder.Services.AddSingleton<IImportProgressHub>(sp =>
 builder.Services.AddSingleton<IGuildSyncQueue, GuildSyncQueue>();
 builder.Services.AddSingleton<GuildSyncHub>();
 builder.Services.AddSingleton<RaidWeekHub>();
+builder.Services.AddSingleton<IRaiderIoSyncQueue, RaiderIoSyncQueue>();
+builder.Services.AddSingleton<RaiderIoSyncHub>();
 
 // Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();
@@ -157,6 +162,7 @@ builder.Services.AddScoped<IPenaltyRepository, PenaltyRepository>();
 
 builder.Services.AddHostedService<ImportWorker>();
 builder.Services.AddHostedService<GuildSyncWorker>();
+builder.Services.AddHostedService<RaiderIoSyncWorker>();
 
 // API
 // In-memory cache for OAuth state nonces (anti-CSRF)

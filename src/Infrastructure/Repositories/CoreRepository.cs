@@ -16,6 +16,16 @@ public class CoreRepository(AppDbContext context) : ICoreRepository
                 .ThenInclude(cp => cp.Player)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    public Task<Core?> GetByIdWithCharactersAsync(int id, CancellationToken ct = default)
+        => _context.Cores
+            .Include(c => c.Players)
+                .ThenInclude(cp => cp.Player)
+                    .ThenInclude(p => p.Characters)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    public async Task<IEnumerable<int>> GetAllCoreIdsAsync(CancellationToken ct = default)
+        => await _context.Cores.Select(c => c.Id).ToListAsync(ct);
+
     public async Task<IEnumerable<Core>> GetAllAsync(int page, int pageSize, CancellationToken ct = default)
         => await _context.Cores
             .Include(c => c.Guild)
