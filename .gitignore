@@ -1,4 +1,3 @@
-
 # Build files
 */**/bin/
 */**/obj/
@@ -6,4 +5,8 @@
 */**/appsettings.json
 */**/appsettings.development.json
 
+# Redis Database
+*.rdb
+
+# Publish
 publish/
