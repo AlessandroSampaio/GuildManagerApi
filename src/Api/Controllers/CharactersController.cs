@@ -1,3 +1,4 @@
+using GuildManagerApi.Infrastructure.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using GuildManagerApi.Application.DTOs;
@@ -9,10 +10,14 @@ namespace GuildManagerApi.Api.Controllers;
 [Route("api/characters")]
 [Produces("application/json")]
 [Authorize]
-public class CharactersController(ICharacterRepository characters, IPerformanceRepository performance) : ControllerBase
+public class CharactersController(
+    ICharacterRepository characters,
+    IPerformanceRepository performance,
+    IRaiderIoService raiderIoService) : ControllerBase
 {
     private readonly ICharacterRepository _characters = characters;
     private readonly IPerformanceRepository _performance = performance;
+    private readonly IRaiderIoService _raiderIoService = raiderIoService;
 
 
     /// <summary>
@@ -48,10 +53,11 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
     }
 
     /// <summary>
-    /// Redireciona para o perfil Raider.IO do personagem usando os dados locais.
+    /// Busca o perfil Raider.IO do personagem (mythic_plus_best_runs:all, raid_progression)
+    /// e atualiza o snapshot local vinculado ao personagem.
     /// </summary>
     [HttpGet("{id:int}/raider-io/profile")]
-    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetRaiderIoProfile([FromRoute] int id, CancellationToken ct)
     {
@@ -59,12 +65,15 @@ public class CharactersController(ICharacterRepository characters, IPerformanceR
         if (character is null) return NotFound();
 
         var region = NormalizeRegion(character.Region);
-        var url = $"/api/raider-io/characters/profile" +
-                  $"?region={Uri.EscapeDataString(region)}" +
-                  $"&realm={Uri.EscapeDataString(character.Server ?? "")}" +
-                  $"&name={Uri.EscapeDataString(character.Name ?? "")}";
+        var (statusCode, body) = await _raiderIoService.GetCharacterProfileAsync(
+            region, character.Server ?? "", character.Name ?? "", id, ct);
 
-        return Redirect(url);
+        return new ContentResult
+        {
+            Content = body,
+            ContentType = "application/json",
+            StatusCode = statusCode,
+        };
     }
 
     /// <summary>

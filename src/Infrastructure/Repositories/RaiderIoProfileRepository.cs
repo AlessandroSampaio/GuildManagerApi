@@ -22,10 +22,6 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
                 s.Realm == realmLower &&
                 s.Region == regionLower, ct);
 
-        var character = await _context.Characters.FirstOrDefaultAsync(c =>
-            c.Name.ToLower() == nameLower &&
-            c.Server.ToLower() == realmLower &&
-            c.Region.ToLower() == regionLower, ct);
 
         if (existing is null)
         {
@@ -47,7 +43,7 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
         existing.ThumbnailUrl = snapshot.ThumbnailUrl;
         existing.LastCrawledAt = snapshot.LastCrawledAt;
         existing.CachedAt = snapshot.CachedAt;
-        existing.CharacterId = character?.Id;
+        existing.CharacterId = snapshot.CharacterId;
 
         await _context.SaveChangesAsync(ct);
 

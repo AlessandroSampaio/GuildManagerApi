@@ -20,7 +20,7 @@ public interface IRaiderIoService
     /// Injeta o access_key automaticamente se configurado.
     /// </summary>
     Task<(int StatusCode, string Body)> GetCharacterProfileAsync(
-        string region, string realm, string name, CancellationToken ct = default);
+        string region, string realm, string name, int characterId, CancellationToken ct = default);
 }
 
 public partial class RaiderIoService(
@@ -38,7 +38,7 @@ public partial class RaiderIoService(
     private const string FixedFields = "mythic_plus_best_runs:all,raid_progression";
 
     public async Task<(int StatusCode, string Body)> GetCharacterProfileAsync(
-        string region, string realm, string name, CancellationToken ct = default)
+        string region, string realm, string name, int characterId, CancellationToken ct = default)
     {
         var query = new Dictionary<string, string>
         {
@@ -67,6 +67,7 @@ public partial class RaiderIoService(
             try
             {
                 var snapshot = ParseSnapshot(body);
+                snapshot.CharacterId = characterId;
                 await _profileRepository.UpsertSnapshotAsync(snapshot, ct);
             }
             catch (Exception ex)
