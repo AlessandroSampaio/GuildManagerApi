@@ -145,26 +145,20 @@ public class ProfileController(
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
-        var baseQuery = _db.Players
+        IQueryable<Domain.Entities.Player> query = _db.Players
             .Include(p => p.Characters)
                 .ThenInclude(c => c.Class)
             .Include(p => p.Characters)
                 .ThenInclude(c => c.Guild);
 
-        IQueryable<GuildManagerApi.Domain.Entities.Player> playerQuery = baseQuery;
-
         if (includeRaiderIo)
-            playerQuery = _db.Players
-                .Include(p => p.Characters)
-                    .ThenInclude(c => c.Class)
-                .Include(p => p.Characters)
-                    .ThenInclude(c => c.Guild)
+            query = query
                 .Include(p => p.Characters)
                     .ThenInclude(c => c.RaiderIoSnapshot!)
                         .ThenInclude(s => s.MythicRuns)
                             .ThenInclude(r => r.Affixes);
 
-        var player = await playerQuery
+        var player = await query
             .FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
 
         if (player is null)
