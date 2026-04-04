@@ -187,7 +187,7 @@ public class ProfileController(
             s.ThumbnailUrl,
             s.LastCrawledAt,
             s.CachedAt,
-            s.MythicRuns.Sum(r => r.Score),
+            Math.Round(s.MythicRuns.Sum(r => r.Score), 2, MidpointRounding.AwayFromZero),
             [..s.MythicRuns.Select(r => new RaiderIoMythicRunDto(
                 r.KeystoneRunId,
                 r.Dungeon,
