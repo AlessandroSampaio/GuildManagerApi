@@ -38,7 +38,8 @@ public record CharacterDto(
     string Name,
     string Server,
     string Class,
-    string? GuildName
+    string? GuildName,
+    RaiderIoSnapshotDto? RaiderIoSnapshot = null
 );
 
 public record CharacterDetailDto(

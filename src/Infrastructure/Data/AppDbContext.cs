@@ -16,6 +16,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<WclUserToken> WclUserTokens => Set<WclUserToken>();
     public DbSet<WclCredential> WclCredentials => Set<WclCredential>();
+    public DbSet<BattleNetUserToken> BattleNetUserTokens => Set<BattleNetUserToken>();
+    public DbSet<BattleNetCredential> BattleNetCredentials => Set<BattleNetCredential>();
     public DbSet<RaiderIoCredential> RaiderIoCredentials => Set<RaiderIoCredential>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<ScoringSettings> ScoringSettings => Set<ScoringSettings>();
@@ -27,6 +29,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
     public DbSet<PlayerWeekPenalty> PlayerWeekPenalties => Set<PlayerWeekPenalty>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<RaiderIoCharacterSnapshot> RaiderIoCharacterSnapshots => Set<RaiderIoCharacterSnapshot>();
+    public DbSet<RaiderIoMythicRun> RaiderIoMythicRuns => Set<RaiderIoMythicRun>();
+    public DbSet<RaiderIoRunAffix> RaiderIoRunAffixes => Set<RaiderIoRunAffix>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -356,7 +361,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasKey(p => p.Id);
                 e.Property(p => p.Id).HasColumnName("id");
                 e.Property(p => p.Name).HasColumnName("name").HasMaxLength(64).IsRequired();
+                e.Property(p => p.AppUserId).HasColumnName("app_user_id");
                 e.HasIndex(p => p.Name);
+                e.HasIndex(p => p.AppUserId).IsUnique();
+
+                e.HasOne(p => p.AppUser)
+                    .WithOne(u => u.Player)
+                    .HasForeignKey<Player>(p => p.AppUserId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
                 e.ToTable("players");
             });
 
@@ -521,6 +535,40 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.ToTable("audit_logs");
             });
 
+        builder.Entity<BattleNetUserToken>(e =>
+            {
+                e.HasKey(t => t.Id);
+                e.Property(t => t.Id).HasColumnName("id");
+                e.Property(t => t.UserId).HasColumnName("user_id");
+                e.Property(t => t.AccessToken).HasColumnName("access_token").IsRequired();
+                e.Property(t => t.ExpiresAt).HasColumnName("expires_at");
+                e.Property(t => t.CreatedAt).HasColumnName("created_at");
+                e.Property(t => t.LastRefreshedAt).HasColumnName("last_refreshed_at");
+                e.Property(t => t.BattleTag).HasColumnName("battle_tag").HasMaxLength(64);
+                e.Property(t => t.Sub).HasColumnName("sub").HasMaxLength(32);
+                e.Ignore(t => t.IsExpired);
+                e.HasIndex(t => t.UserId).IsUnique(); // one token per user
+
+                e.HasOne(t => t.User)
+                .WithOne(u => u.BattleNetToken)
+                .HasForeignKey<BattleNetUserToken>(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("bnet_user_tokens");
+            });
+
+        builder.Entity<BattleNetCredential>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasColumnName("id").ValueGeneratedNever();
+                e.Property(c => c.ClientIdEncrypted).HasColumnName("client_id_encrypted").IsRequired();
+                e.Property(c => c.ClientSecretEncrypted).HasColumnName("client_secret_encrypted").IsRequired();
+                e.Property(c => c.Label).HasColumnName("label").HasMaxLength(128);
+                e.Property(c => c.CreatedAt).HasColumnName("created_at");
+                e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
+                e.ToTable("bnet_credentials");
+            });
+
         builder.Entity<RaiderIoCredential>(e =>
             {
                 e.HasKey(c => c.Id);
@@ -531,5 +579,67 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(c => c.UpdatedAt).HasColumnName("updated_at");
                 e.ToTable("raider_io_credentials");
             });
+
+        builder.Entity<RaiderIoCharacterSnapshot>(e =>
+            {
+                e.HasKey(s => s.Id);
+                e.Property(s => s.Id).HasColumnName("id");
+                e.Property(s => s.Name).HasColumnName("name").HasMaxLength(50).IsRequired();
+                e.Property(s => s.Realm).HasColumnName("realm").HasMaxLength(100).IsRequired();
+                e.Property(s => s.Region).HasColumnName("region").HasMaxLength(10).IsRequired();
+                e.Property(s => s.ThumbnailUrl).HasColumnName("thumbnail_url").HasMaxLength(512);
+                e.Property(s => s.LastCrawledAt).HasColumnName("last_crawled_at");
+                e.Property(s => s.CachedAt).HasColumnName("cached_at");
+                e.Property(s => s.CharacterId).HasColumnName("character_id");
+                e.HasIndex(s => new { s.Name, s.Realm, s.Region }).IsUnique();
+                e.HasIndex(s => s.CharacterId);
+
+                e.HasOne(s => s.Character)
+                    .WithOne(c => c.RaiderIoSnapshot)
+                    .HasForeignKey<RaiderIoCharacterSnapshot>(s => s.CharacterId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
+                e.ToTable("raiderio_character_snapshots");
+            });
+
+        builder.Entity<RaiderIoMythicRun>(e =>
+            {
+                e.HasKey(r => r.Id);
+                e.Property(r => r.Id).HasColumnName("id");
+                e.Property(r => r.SnapshotId).HasColumnName("snapshot_id");
+                e.Property(r => r.KeystoneRunId).HasColumnName("keystone_run_id");
+                e.Property(r => r.Dungeon).HasColumnName("dungeon").HasMaxLength(128).IsRequired();
+                e.Property(r => r.ShortName).HasColumnName("short_name").HasMaxLength(16);
+                e.Property(r => r.MythicLevel).HasColumnName("mythic_level");
+                e.Property(r => r.CompletedAt).HasColumnName("completed_at");
+                e.Property(r => r.Score).HasColumnName("score");
+                e.Property(r => r.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
+                e.Property(r => r.BackgroundImageUrl).HasColumnName("background_image_url").HasMaxLength(512);
+                e.HasIndex(r => r.KeystoneRunId).IsUnique();
+                e.HasIndex(r => r.SnapshotId);
+
+                e.HasOne(r => r.Snapshot)
+                    .WithMany(s => s.MythicRuns)
+                    .HasForeignKey(r => r.SnapshotId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("raiderio_mythic_runs");
+            });
+
+        builder.Entity<RaiderIoRunAffix>(e =>
+            {
+                e.HasKey(a => a.AffixId);
+                e.Property(a => a.AffixId).HasColumnName("affix_id").ValueGeneratedNever();
+                e.Property(a => a.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+                e.Property(a => a.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
+
+                e.ToTable("raiderio_run_affixes");
+            });
+
+        builder.Entity<RaiderIoMythicRun>()
+            .HasMany(r => r.Affixes)
+            .WithMany(a => a.MythicRuns)
+            .UsingEntity(j => j.ToTable("raiderio_run_affix_links"));
     }
 }

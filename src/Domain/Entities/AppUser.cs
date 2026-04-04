@@ -1,4 +1,5 @@
 
+
 using GuildManagerApi.Domain.Enums;
 
 namespace GuildManagerApi.Domain.Entities;
@@ -17,6 +18,9 @@ public class AppUser
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
     // WarcraftLogs OAuth token (Authorization Code Flow)
     public WclUserToken? WclToken { get; set; }
+    // Battle.net OAuth token (Authorization Code Flow)
+    public BattleNetUserToken? BattleNetToken { get; set; }
+    public Player? Player { get; set; }
 }
 
 public class RefreshToken

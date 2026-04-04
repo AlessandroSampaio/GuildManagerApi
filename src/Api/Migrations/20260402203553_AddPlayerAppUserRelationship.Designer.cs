@@ -3,6 +3,7 @@ using System;
 using GuildManagerApi.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GuildManagerApi.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260402203553_AddPlayerAppUserRelationship")]
+    partial class AddPlayerAppUserRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -731,62 +734,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.ToTable("raid_week_reports", (string)null);
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CachedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("cached_at");
-
-                    b.Property<int?>("CharacterId")
-                        .HasColumnType("integer")
-                        .HasColumnName("character_id");
-
-                    b.Property<DateTimeOffset>("LastCrawledAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_crawled_at");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Realm")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("realm");
-
-                    b.Property<string>("Region")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("region");
-
-                    b.Property<string>("ThumbnailUrl")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("thumbnail_url");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CharacterId")
-                        .IsUnique();
-
-                    b.HasIndex("Name", "Realm", "Region")
-                        .IsUnique();
-
-                    b.ToTable("raiderio_character_snapshots", (string)null);
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoCredential", b =>
                 {
                     b.Property<int>("Id")
@@ -814,92 +761,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("raider_io_credentials", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoMythicRun", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("BackgroundImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("background_image_url");
-
-                    b.Property<DateTimeOffset>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<string>("Dungeon")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("dungeon");
-
-                    b.Property<string>("IconUrl")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("icon_url");
-
-                    b.Property<long>("KeystoneRunId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("keystone_run_id");
-
-                    b.Property<int>("MythicLevel")
-                        .HasColumnType("integer")
-                        .HasColumnName("mythic_level");
-
-                    b.Property<double>("Score")
-                        .HasColumnType("double precision")
-                        .HasColumnName("score");
-
-                    b.Property<string>("ShortName")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("short_name");
-
-                    b.Property<int>("SnapshotId")
-                        .HasColumnType("integer")
-                        .HasColumnName("snapshot_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("KeystoneRunId")
-                        .IsUnique();
-
-                    b.HasIndex("SnapshotId");
-
-                    b.ToTable("raiderio_mythic_runs", (string)null);
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoRunAffix", b =>
-                {
-                    b.Property<int>("AffixId")
-                        .HasColumnType("integer")
-                        .HasColumnName("affix_id");
-
-                    b.Property<string>("IconUrl")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("icon_url");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("name");
-
-                    b.HasKey("AffixId");
-
-                    b.ToTable("raiderio_run_affixes", (string)null);
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RefreshToken", b =>
@@ -1428,21 +1289,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.ToTable("wcl_user_tokens", (string)null);
                 });
 
-            modelBuilder.Entity("RaiderIoMythicRunRaiderIoRunAffix", b =>
-                {
-                    b.Property<int>("AffixesAffixId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("MythicRunsId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("AffixesAffixId", "MythicRunsId");
-
-                    b.HasIndex("MythicRunsId");
-
-                    b.ToTable("raiderio_run_affix_links", (string)null);
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.BattleNetUserToken", b =>
                 {
                     b.HasOne("GuildManagerApi.Domain.Entities.AppUser", "User")
@@ -1596,27 +1442,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.Navigation("RaidWeek");
                 });
 
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.Character", "Character")
-                        .WithOne("RaiderIoSnapshot")
-                        .HasForeignKey("GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot", "CharacterId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Character");
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoMythicRun", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot", "Snapshot")
-                        .WithMany("MythicRuns")
-                        .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Snapshot");
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("GuildManagerApi.Domain.Entities.AppUser", "User")
@@ -1671,21 +1496,6 @@ namespace GuildManagerApi.Api.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("RaiderIoMythicRunRaiderIoRunAffix", b =>
-                {
-                    b.HasOne("GuildManagerApi.Domain.Entities.RaiderIoRunAffix", null)
-                        .WithMany()
-                        .HasForeignKey("AffixesAffixId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("GuildManagerApi.Domain.Entities.RaiderIoMythicRun", null)
-                        .WithMany()
-                        .HasForeignKey("MythicRunsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.AppUser", b =>
                 {
                     b.Navigation("BattleNetToken");
@@ -1700,8 +1510,6 @@ namespace GuildManagerApi.Api.Migrations
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Character", b =>
                 {
                     b.Navigation("PerformanceEntries");
-
-                    b.Navigation("RaiderIoSnapshot");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Class", b =>
@@ -1747,11 +1555,6 @@ namespace GuildManagerApi.Api.Migrations
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaidWeek", b =>
                 {
                     b.Navigation("ReportEntries");
-                });
-
-            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot", b =>
-                {
-                    b.Navigation("MythicRuns");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.Report", b =>

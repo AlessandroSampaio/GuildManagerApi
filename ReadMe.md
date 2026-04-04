@@ -14,14 +14,15 @@ API RESTful em **C# .NET 10.0** que atua como middleware entre o cliente e a API
 4. [Configuração e Instalação](#4-configuração-e-instalação)
 5. [Autenticação Local (JWT)](#5-autenticação-local-jwt)
 6. [Autenticação WarcraftLogs (OAuth 2.0)](#6-autenticação-warcraftlogs-oauth-20)
-7. [Workflow Completo](#7-workflow-completo)
-8. [Conceitos de Domínio](#8-conceitos-de-domínio)
-9. [Endpoints da API](#9-endpoints-da-api)
-10. [Schema do Banco de Dados](#10-schema-do-banco-de-dados)
-11. [Estrutura do Projeto](#11-estrutura-do-projeto)
-12. [Checklist de Implementação](#12-checklist-de-implementação)
-13. [Observações Importantes](#13-observações-importantes)
-14. [Próximos Passos](#14-próximos-passos)
+7. [Autenticação Battle.net (OAuth 2.0)](#7-autenticação-battlenet-oauth-20)
+8. [Workflow Completo](#8-workflow-completo)
+9. [Conceitos de Domínio](#9-conceitos-de-domínio)
+10. [Endpoints da API](#10-endpoints-da-api)
+11. [Schema do Banco de Dados](#11-schema-do-banco-de-dados)
+12. [Estrutura do Projeto](#12-estrutura-do-projeto)
+13. [Checklist de Implementação](#13-checklist-de-implementação)
+14. [Observações Importantes](#14-observações-importantes)
+15. [Próximos Passos](#15-próximos-passos)
 
 ---
 
@@ -80,6 +81,8 @@ O modo é resolvido **automaticamente**: se o usuário autenticado possui um tok
 - Client WarcraftLogs registrado em [https://www.warcraftlogs.com/api/clients/](https://www.warcraftlogs.com/api/clients/)
   - Tipo: **Authorization Code** (necessário para a rota privada)
   - Redirect URI configurada: `https://localhost:5001/api/wcl-auth/callback`
+- Client Battle.net registrado em [https://develop.battle.net/access/clients](https://develop.battle.net/access/clients)
+  - Redirect URI configurada: `http://localhost:5173/api/profile/bnet/callback`
 
 ---
 
@@ -299,9 +302,67 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 
 ---
 
-## 7. Workflow Completo
+## 7. Autenticação Battle.net (OAuth 2.0)
 
-### 7.1 Primeiro uso (report público)
+Cada usuário pode vincular sua conta Battle.net ao próprio perfil via Authorization Code Flow. O token é armazenado individualmente por usuário (`BattleNetUserToken` — relação 1:1 com `AppUser`).
+
+> **Importante:** O Battle.net **não emite refresh tokens**. Quando o token expira, o usuário precisa re-autorizar.
+
+### Configuração da aplicação
+
+As credenciais OAuth da aplicação (ClientId / ClientSecret) são configuradas por um Admin via:
+
+```bash
+PUT /api/admin/bnet-credentials
+Authorization: Bearer <jwt_admin>
+
+{ "clientId": "...", "clientSecret": "...", "label": "prod" }
+```
+
+### Fluxo de vinculação por usuário
+
+#### Passo 1 — Obter URL de autorização
+
+```bash
+GET /api/profile/bnet/authorize
+Authorization: Bearer <seu_jwt>
+```
+
+Resposta:
+```json
+{
+  "authorizeUrl": "https://oauth.battle.net/authorize?client_id=...&state=abc123",
+  "state": "abc123",
+  "instructions": "Abra a URL no browser para autorizar o acesso ao Battle.net."
+}
+```
+
+#### Passo 2 — Usuário autoriza no browser
+
+O usuário abre `authorizeUrl` e clica em **Authorize** no site do Battle.net.
+
+#### Passo 3 — Battle.net redireciona para o callback
+
+```
+GET /api/profile/bnet/callback?code=AUTHORIZATION_CODE&state=abc123
+```
+
+A API valida o `state` (anti-CSRF), troca o `code` pelo access token, busca o `BattleTag` via `/userinfo` e persiste o token vinculado ao usuário. O browser é redirecionado ao frontend com `?success=true`.
+
+### Endpoints de gerenciamento (por usuário)
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/profile/bnet/authorize` | ✅ JWT | Retorna URL de autorização Battle.net |
+| `GET` | `/api/profile/bnet/callback` | ❌ | Callback OAuth — chamado pelo Battle.net |
+| `GET` | `/api/profile/bnet/status` | ✅ JWT | Verifica se o usuário tem token BNet ativo e retorna BattleTag |
+| `DELETE` | `/api/profile/bnet/revoke` | ✅ JWT | Revoga e remove o token Battle.net do usuário |
+
+---
+
+## 8. Workflow Completo
+
+### 8.1 Primeiro uso (report público)
 
 ```
 1.  POST /api/auth/register          → cria conta, obtém JWT
@@ -310,7 +371,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 3.  GET  /api/Reports/{code}         → consulta dados armazenados
 ```
 
-### 7.2 Primeiro uso (report privado)
+### 8.2 Primeiro uso (report privado)
 
 ```
 1.  POST /api/auth/register                 → cria conta, obtém JWT
@@ -321,7 +382,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 6.  GET  /api/Reports/{code}/performance    → consulta performance armazenada
 ```
 
-### 7.3 Uso recorrente (token WCL já autorizado)
+### 8.3 Uso recorrente (token WCL já autorizado)
 
 ```
 1.  POST /api/auth/login             → obtém JWT
@@ -330,7 +391,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
     ↳ se refresh token inválido      → 401 com mensagem de re-autorização
 ```
 
-### 7.4 Sincronizar roster de uma guilda
+### 8.4 Sincronizar roster de uma guilda
 
 ```
 1.  POST /api/guilds/{id}/sync-characters     → enfileira o sync, retorna 202 + wsUrl
@@ -362,7 +423,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 { "guildId": 1, "phase": "Failed",           "phaseCode": 4, "message": "KeyNotFoundException: Guild 99 not found." }
 ```
 
-### 7.5 Calcular pontuação de uma semana de raid
+### 8.5 Calcular pontuação de uma semana de raid
 
 ```
 1.  POST /api/raid-weeks                              → cria a semana (label + startsAt)
@@ -371,7 +432,7 @@ Quando o access token do usuário expira, o `WclTokenService` renova automaticam
 4.  POST /api/player-scoring/by-week/{raidWeekId}     → calcula pontuação da semana
 ```
 
-### 7.6 Verificar status da autorização WCL
+### 8.6 Verificar status da autorização WCL
 
 ```bash
 GET /api/wcl-auth/status
@@ -384,7 +445,7 @@ Authorization: Bearer <seu_jwt>
 # { "userId": "...", "isAuthorized": false, "message": "Not authorized. Call GET /api/wcl-auth/authorize." }
 ```
 
-### 7.7 Revogar acesso WCL
+### 8.7 Revogar acesso WCL
 
 ```bash
 DELETE /api/wcl-auth/revoke
@@ -394,7 +455,7 @@ Authorization: Bearer <seu_jwt>
 
 ---
 
-## 8. Conceitos de Domínio
+## 9. Conceitos de Domínio
 
 ### Player
 
@@ -422,7 +483,7 @@ Sistema de pontuação que converte o `rankPercent` WarcraftLogs em pontos intei
 
 ---
 
-## 9. Endpoints da API
+## 10. Endpoints da API
 
 Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer <jwt>`.
 
@@ -447,6 +508,15 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | `GET` | `/api/wcl-auth/status` | ✅ JWT | Verifica se o usuário possui token WCL ativo |
 | `DELETE` | `/api/wcl-auth/revoke` | ✅ JWT | Revoga e remove o token WCL do usuário |
 
+### Profile (Battle.net)
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| `GET` | `/api/profile/bnet/authorize` | ✅ JWT | Inicia o fluxo OAuth — retorna a URL de autorização do Battle.net |
+| `GET` | `/api/profile/bnet/callback` | ❌ | Callback do Battle.net — valida state, troca code por token e busca BattleTag |
+| `GET` | `/api/profile/bnet/status` | ✅ JWT | Verifica se o usuário possui token BNet ativo e retorna BattleTag |
+| `DELETE` | `/api/profile/bnet/revoke` | ✅ JWT | Revoga e remove o token Battle.net do usuário |
+
 ### Admin
 
 > Requer role `Admin`.
@@ -455,6 +525,8 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 |--------|------|------|-----------|
 | `PUT` | `/api/admin/wcl-credentials` | ✅ Admin | Configura as credenciais WCL da aplicação (clientId + clientSecret) |
 | `GET` | `/api/admin/wcl-credentials/status` | ✅ Admin | Retorna o status das credenciais WCL configuradas |
+| `PUT` | `/api/admin/bnet-credentials` | ✅ Admin | Configura as credenciais Battle.net da aplicação (clientId + clientSecret) |
+| `GET` | `/api/admin/bnet-credentials/status` | ✅ Admin | Retorna o status das credenciais Battle.net configuradas |
 | `PUT` | `/api/admin/raider-io-key` | ✅ Admin | Configura a API Key do Raider.IO (opcional, criptografada) |
 | `GET` | `/api/admin/raider-io-key/status` | ✅ Admin | Retorna o status da API Key do Raider.IO configurada |
 | `DELETE` | `/api/admin/raider-io-key` | ✅ Admin | Remove a API Key do Raider.IO |
@@ -462,6 +534,7 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | `PUT` | `/api/admin/scoring-settings` | ✅ Admin | Atualiza as configurações de tiers de pontuação |
 | `DELETE` | `/api/admin/scoring-settings` | ✅ Admin | Remove as configurações de pontuação |
 | `GET` | `/api/admin/scoring-settings/calculate` | ✅ Admin | Simula o cálculo de pontos para um `rankPercent` informado (query param) |
+| `GET` | `/api/admin/audit-log` | ✅ Admin | Retorna o log de auditoria paginado (filtros: entityType, action, from, to) |
 
 #### Exemplo — configurar tiers de pontuação
 
@@ -684,7 +757,7 @@ Um **Core** é um grupo fixo de players associado a uma guilda. Quando vinculado
 
 ---
 
-## 10. Schema do Banco de Dados
+## 11. Schema do Banco de Dados
 
 ### `Reports` — Tabela principal
 
@@ -774,12 +847,38 @@ Um **Core** é um grupo fixo de players associado a uma guilda. Quando vinculado
 | Coluna | Tipo | Flag | Descrição |
 |--------|------|------|-----------|
 | `Id` | `int` | PK | Auto-increment |
-| `UserId` | `int` | FK UNIQUE | Um token por usuário (1:1 com AppUsers) |
+| `UserId` | `Guid` | FK UNIQUE | Um token por usuário (1:1 com AppUsers) |
 | `AccessToken` | `string` | | Bearer token WCL atual |
 | `WclRefreshToken` | `string(512)` | | Refresh token WCL para renovação |
 | `ExpiresAt` | `DateTime` | | Expiração do access token |
 | `CreatedAt` | `DateTime` | | Primeira autorização |
 | `LastRefreshedAt` | `DateTime?` | | Última renovação automática |
+
+### `BnetUserTokens` — Tokens OAuth Battle.net por usuário
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Auto-increment |
+| `UserId` | `Guid` | FK UNIQUE | Um token por usuário (1:1 com AppUsers) |
+| `AccessToken` | `string` | | Bearer token Battle.net atual |
+| `ExpiresAt` | `DateTime` | | Expiração do access token |
+| `CreatedAt` | `DateTime` | | Primeira autorização |
+| `LastRefreshedAt` | `DateTime?` | | Última atualização |
+| `BattleTag` | `string(64)?` | | BattleTag do usuário (ex: Player#1234) |
+| `Sub` | `string(32)?` | | ID numérico da conta Battle.net |
+
+> Battle.net não emite refresh tokens — token expirado exige nova re-autorização via `/api/profile/bnet/authorize`.
+
+### `BnetCredentials` — Credenciais OAuth da aplicação Battle.net
+
+| Coluna | Tipo | Flag | Descrição |
+|--------|------|------|-----------|
+| `Id` | `int` | PK | Singleton (valor fixo = 1) |
+| `ClientIdEncrypted` | `byte[]` | | ClientId cifrado (AES-256-GCM) |
+| `ClientSecretEncrypted` | `byte[]` | | ClientSecret cifrado (AES-256-GCM) |
+| `Label` | `string(128)?` | | Identificador amigável |
+| `CreatedAt` | `DateTime` | | Criação |
+| `UpdatedAt` | `DateTime` | | Última atualização |
 
 ### `Players` — Jogadores reais
 
@@ -827,7 +926,7 @@ Tabelas que definem os tiers de conversão de `rankPercent` → pontos, gerencia
 
 ---
 
-## 11. Estrutura do Projeto
+## 12. Estrutura do Projeto
 
 ```
 WarcraftLogsApi/
@@ -846,10 +945,12 @@ WarcraftLogsApi/
 │   │   │   ├── PenaltyEvent.cs
 │   │   │   ├── PlayerWeekPenalty.cs
 │   │   │   ├── ScoringSettings.cs
-│   │   │   └── AppUser.cs          # AppUser + RefreshToken + WclUserToken
+│   │   │   ├── AppUser.cs          # AppUser + RefreshToken + WclUserToken + BattleNetUserToken
+│   │   │   └── BattleNetEntities.cs # BattleNetUserToken + BattleNetCredential
 │   │   └── Interfaces/
 │   │       ├── IRepositories.cs
-│   │       └── IUserRepository.cs
+│   │       ├── IUserRepository.cs
+│   │       └── IBattleNetCredentialService.cs
 │   │
 │   ├── WarcraftLogsApi.Application/
 │   │   ├── Auth/
@@ -868,9 +969,12 @@ WarcraftLogsApi/
 │   │
 │   ├── WarcraftLogsApi.Infrastructure/
 │   │   ├── Auth/
-│   │   │   └── WclTokenService.cs  # Client Credentials + Authorization Code
+│   │   │   ├── WclTokenService.cs       # Client Credentials + Authorization Code WCL
+│   │   │   └── BattleNetTokenService.cs # Authorization Code Flow Battle.net + IBNetTokenService
 │   │   ├── Data/
 │   │   │   └── AppDbContext.cs
+│   │   ├── Encryption/
+│   │   │   └── BattleNetCredentialService.cs # AES-256-GCM para credenciais BNet
 │   │   └── Repositories/
 │   │       ├── Repositories.cs
 │   │       └── UserRepository.cs
@@ -879,6 +983,7 @@ WarcraftLogsApi/
 │       ├── Controllers/
 │       │   ├── AuthController.cs
 │       │   ├── WclAuthController.cs
+│       │   ├── ProfileController.cs        # BNet OAuth por usuário (/api/profile/bnet/*)
 │       │   ├── AdminController.cs
 │       │   ├── ReportsController.cs
 │       │   ├── CharactersController.cs
@@ -899,7 +1004,7 @@ WarcraftLogsApi/
 
 ---
 
-## 12. Checklist de Implementação
+## 13. Checklist de Implementação
 
 ### Fase 1 — Fundação
 - [x] Criar solução .NET 10 com 4 projetos (Domain, Application, Infrastructure, API)
@@ -931,18 +1036,26 @@ WarcraftLogsApi/
 - [x] Implementar `PenaltyEventsController` (CRUD)
 - [x] Implementar `RaidWeeksController` (CRUD + reports + penalties)
 - [x] Implementar `PlayerScoringController` (por report codes e por raid week)
-- [x] Implementar `AdminController` (credenciais WCL + scoring settings)
+- [x] Implementar `AdminController` (credenciais WCL + BNet + Raider.IO + scoring settings + audit log)
 - [x] Implementar `PlayerScoringService` com conversão rankPercent → pontos por tiers
 
-### Fase 6 — Qualidade
+### Fase 6 — Integração Battle.net
+- [x] Implementar `BattleNetTokenService` — Authorization Code Flow por usuário
+- [x] Implementar `BattleNetCredentialService` — cifra ClientId/ClientSecret com AES-256-GCM
+- [x] Relação 1:1 `AppUser` ↔ `BattleNetUserToken` (FK com índice único, cascade delete)
+- [x] Implementar `ProfileController` com endpoints `/api/profile/bnet/*` (authorize / callback / status / revoke)
+- [x] Buscar BattleTag e Sub via `/userinfo` após troca do code
+
+### Fase 7 — Qualidade
 - [ ] Testes unitários para `PlayerScoringService`
 - [ ] Testes unitários para `ImportReportService`
 - [ ] Testes de integração para o fluxo OAuth WCL
+- [ ] Testes de integração para o fluxo OAuth Battle.net
 - [ ] Documentar variáveis de ambiente
 
 ---
 
-## 13. Observações Importantes
+## 14. Observações Importantes
 
 - O `reportCode` no WarcraftLogs é **alfanumérico** (ex: `"aAbBcCdDeE"`), nunca numérico
 - A resolução entre rota pública e privada é **automática e transparente** — baseada na existência de token WCL vinculado ao usuário autenticado via JWT
@@ -950,6 +1063,9 @@ WarcraftLogsApi/
 - Rankings são buscados apenas para **kills** — wipes não possuem dados de ranking no WCL
 - O token de aplicação (Client Credentials) é cacheado em **memória compartilhada**; os tokens de usuário (Authorization Code) são persistidos por usuário no **banco de dados**
 - A renovação via refresh token WCL é automática. Se o refresh token for inválido, o token é removido do banco e a API retorna `401` com mensagem indicando a necessidade de re-autorização
+- O Battle.net **não emite refresh tokens** — quando o token do usuário expira, é necessário re-iniciar o fluxo via `GET /api/profile/bnet/authorize`
+- O `BattleTag` e o `Sub` (ID numérico da conta) são obtidos automaticamente via `/userinfo` logo após a troca do `code` no callback Battle.net
+- As credenciais OAuth da aplicação Battle.net (ClientId/ClientSecret) são armazenadas cifradas com AES-256-GCM, igual às credenciais WCL
 - A importação é **idempotente** — re-importar o mesmo report atualiza os dados existentes
 - O `RedirectUri` configurado no `appsettings.json` deve ser idêntico ao registrado no painel do WarcraftLogs
 - O `GlobalExceptionMiddleware` retorna respostas no formato **ProblemDetails** (RFC 7807)
@@ -959,7 +1075,7 @@ WarcraftLogsApi/
 
 ---
 
-## 14. Próximos Passos
+## 15. Próximos Passos
 
 - [x] Background worker para sincronização paginada de roster de guilda (`GuildSyncWorker`)
 - [ ] Background job para re-sincronizar reports periodicamente (Hangfire ou Worker Service)
@@ -970,4 +1086,4 @@ WarcraftLogsApi/
 
 ---
 
-*GuildManager API · Design Spec v2.0 · .NET 10 · PostgreSQL*
+*GuildManager API · Design Spec v3.0 · .NET 10 · PostgreSQL*
