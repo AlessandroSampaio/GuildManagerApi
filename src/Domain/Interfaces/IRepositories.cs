@@ -65,6 +65,7 @@ public interface ICoreRepository
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
     Task<bool> AddPlayerAsync(int coreId, int playerId, CancellationToken ct = default);
     Task<bool> RemovePlayerAsync(int coreId, int playerId, CancellationToken ct = default);
+    Task<bool> IsPlayerInCoreAsync(int coreId, int playerId, CancellationToken ct = default);
 }
 
 public interface IPlayerRepository

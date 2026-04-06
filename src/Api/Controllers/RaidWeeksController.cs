@@ -17,12 +17,14 @@ public class RaidWeeksController(
         IRaidWeekRepository repository,
         IPenaltyRepository penalties,
         IPlayerRepository players,
+        ICoreRepository cores,
         RaidWeekHub hub,
         IAuditService audit) : ControllerBase
 {
     private readonly IRaidWeekRepository _repository = repository;
     private readonly IPenaltyRepository _penalties = penalties;
     private readonly IPlayerRepository _players = players;
+    private readonly ICoreRepository _cores = cores;
     private readonly RaidWeekHub _hub = hub;
     private readonly IAuditService _audit = audit;
 
@@ -45,7 +47,9 @@ public class RaidWeeksController(
             w.Label,
             w.StartsAt,
             w.EndsAt,
-            w.ReportEntries.Count
+            w.ReportEntries.Count,
+            w.CoreId,
+            w.Core?.Name
         )).ToList();
 
         return Ok(new PagedResult<RaidWeekSummaryDto>(dtos, page, pageSize, total));
@@ -119,10 +123,18 @@ public class RaidWeeksController(
         if (string.IsNullOrWhiteSpace(request.Label))
             return BadRequest(new { error = "Label is required." });
 
+        if (request.CoreId is not null)
+        {
+            var coreExists = await _cores.GetByIdAsync(request.CoreId.Value, ct);
+            if (coreExists is null)
+                return NotFound(new { error = $"Core {request.CoreId} not found." });
+        }
+
         var week = new RaidWeek
         {
             Label = request.Label.Trim(),
             StartsAt = normalizedStart,
+            CoreId = request.CoreId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
@@ -276,6 +288,16 @@ public class RaidWeeksController(
         var player = await _players.GetByIdAsync(request.PlayerId, ct);
         if (player is null) return NotFound(new { error = $"Player {request.PlayerId} not found." });
 
+        if (week.CoreId is not null)
+        {
+            var isMember = await _cores.IsPlayerInCoreAsync(week.CoreId.Value, request.PlayerId, ct);
+            if (!isMember)
+                return UnprocessableEntity(new
+                {
+                    error = $"Player {request.PlayerId} is not a member of core {week.CoreId} associated with this raid week."
+                });
+        }
+
         var penaltyEvent = await _penalties.GetEventByIdAsync(request.PenaltyEventId, ct);
         if (penaltyEvent is null)
             return NotFound(new { error = $"Penalty event {request.PenaltyEventId} not found." });
@@ -339,7 +361,9 @@ public class RaidWeeksController(
             w.EndsAt,
             w.CreatedAt,
             w.UpdatedAt,
-            [.. w.ReportEntries.OrderBy(r => r.AddedAt).Select(r => r.ReportCode)]
+            [.. w.ReportEntries.OrderBy(r => r.AddedAt).Select(r => r.ReportCode)],
+            w.CoreId,
+            w.Core?.Name
         );
 
     private static PlayerWeekPenaltyDto ToPenaltyDto(PlayerWeekPenalty p) => new(

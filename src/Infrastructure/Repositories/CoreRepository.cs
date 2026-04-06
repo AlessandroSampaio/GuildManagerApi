@@ -86,4 +86,8 @@ public class CoreRepository(AppDbContext context) : ICoreRepository
             .ExecuteDeleteAsync(ct);
         return rows > 0;
     }
+
+    public Task<bool> IsPlayerInCoreAsync(int coreId, int playerId, CancellationToken ct = default)
+        => _context.CorePlayers
+            .AnyAsync(cp => cp.CoreId == coreId && cp.PlayerId == playerId, ct);
 }

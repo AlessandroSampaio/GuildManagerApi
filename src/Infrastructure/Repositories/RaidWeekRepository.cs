@@ -50,6 +50,7 @@ public class RaidWeekRepository(AppDbContext context) : IRaidWeekRepository
     public async Task<IEnumerable<RaidWeek>> GetAllAsync(int page, int pageSize, CancellationToken ct = default)
         => await _context.RaidWeeks
                      .Include(w => w.ReportEntries)
+                     .Include(w => w.Core)
                      .OrderByDescending(w => w.StartsAt)
                      .Skip((page - 1) * pageSize)
                      .Take(pageSize)
@@ -61,12 +62,14 @@ public class RaidWeekRepository(AppDbContext context) : IRaidWeekRepository
         var tuesday = TuesdayOf(date);
         return _context.RaidWeeks
                   .Include(w => w.ReportEntries)
+                  .Include(w => w.Core)
                   .FirstOrDefaultAsync(w => w.StartsAt == tuesday, ct);
     }
 
     public Task<RaidWeek?> GetByIdAsync(int id, CancellationToken ct = default)
         => _context.RaidWeeks
                  .Include(w => w.ReportEntries)
+                 .Include(w => w.Core)
                  .FirstOrDefaultAsync(w => w.Id == id, ct);
 
     public async Task<bool> RemoveReportAsync(int raidWeekId, string reportCode, CancellationToken ct = default)

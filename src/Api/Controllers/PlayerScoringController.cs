@@ -261,7 +261,9 @@ public class PlayerScoringController(
             raidWeek.Label,
             raidWeek.StartsAt,
             raidWeek.EndsAt,
-            raidWeek.ReportEntries.Count
+            raidWeek.ReportEntries.Count,
+            raidWeek.CoreId,
+            raidWeek.Core?.Name
         );
 
         return Ok(new PlayerScoringResult(

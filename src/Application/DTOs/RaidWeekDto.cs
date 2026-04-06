@@ -7,7 +7,9 @@ public record RaidWeekDto(
     DateTime EndsAt,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    List<string> ReportCodes
+    List<string> ReportCodes,
+    int? CoreId,
+    string? CoreName
 );
 
 public record RaidWeekSummaryDto(
@@ -15,7 +17,9 @@ public record RaidWeekSummaryDto(
     string Label,
     DateTime StartsAt,
     DateTime EndsAt,
-    int ReportCount
+    int ReportCount,
+    int? CoreId,
+    string? CoreName
 );
 
 public record CreateRaidWeekRequest(
@@ -26,7 +30,9 @@ public record CreateRaidWeekRequest(
     /// </summary>
     DateTime StartsAt,
     /// <summary>Report codes a associar imediatamente (opcional).</summary>
-    List<string>? ReportCodes = null
+    List<string>? ReportCodes = null,
+    /// <summary>Core associado à semana (opcional). Quando informado, apenas membros do core podem ser adicionados como participantes.</summary>
+    int? CoreId = null
 );
 
 public record UpdateRaidWeekRequest(
