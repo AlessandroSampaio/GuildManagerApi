@@ -47,7 +47,13 @@ public interface IBNetTokenService
 
     /// <summary>Busca todos os personagens WoW vinculados à conta Battle.net do usuário via /profile/user/wow.</summary>
     Task<IReadOnlyList<long>> FetchWowCharacterIdsAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Busca detalhes completos dos personagens WoW vinculados à conta Battle.net do usuário.</summary>
+    Task<IReadOnlyList<BNetWowCharacterDetail>> FetchWowCharacterDetailsAsync(Guid userId, CancellationToken ct = default);
 }
+
+/// <summary>Detalhes de um personagem WoW retornado pela Blizzard /profile/user/wow.</summary>
+public record BNetWowCharacterDetail(long Id, string Name, string RealmSlug, int ClassId, int Level);
 
 public partial class BattleNetTokenService(
     HttpClient httpClient,
@@ -201,6 +207,12 @@ public partial class BattleNetTokenService(
 
     public async Task<IReadOnlyList<long>> FetchWowCharacterIdsAsync(Guid userId, CancellationToken ct = default)
     {
+        var details = await FetchWowCharacterDetailsAsync(userId, ct);
+        return details.Select(d => d.Id).ToList();
+    }
+
+    public async Task<IReadOnlyList<BNetWowCharacterDetail>> FetchWowCharacterDetailsAsync(Guid userId, CancellationToken ct = default)
+    {
         var accessToken = await GetUserTokenAsync(userId, ct);
 
         const string url = "https://us.api.blizzard.com/profile/user/wow?namespace=profile-us&locale=en_US";
@@ -213,23 +225,33 @@ public partial class BattleNetTokenService(
         var json = await res.Content.ReadAsStringAsync(ct);
         var doc = JsonDocument.Parse(json);
 
-        var ids = new List<long>();
+        var results = new List<BNetWowCharacterDetail>();
         if (!doc.RootElement.TryGetProperty("wow_accounts", out var accounts))
-            return ids;
+            return results;
 
         foreach (var account in accounts.EnumerateArray())
         {
-            if (!account.TryGetProperty("characters", out var characters))
+            if (!account.TryGetProperty("characters", out var chars))
                 continue;
 
-            foreach (var character in characters.EnumerateArray())
+            foreach (var ch in chars.EnumerateArray())
             {
-                if (character.TryGetProperty("id", out var idProp))
-                    ids.Add(idProp.GetInt64());
+                if (!ch.TryGetProperty("id", out var idProp)) continue;
+
+                var id        = idProp.GetInt64();
+                var name      = ch.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+                var realmSlug = ch.TryGetProperty("realm", out var realm)
+                    && realm.TryGetProperty("slug", out var slug)
+                        ? slug.GetString() ?? string.Empty : string.Empty;
+                var classId   = ch.TryGetProperty("playable_class", out var cls)
+                    && cls.TryGetProperty("id", out var cid) ? cid.GetInt32() : 0;
+                var level     = ch.TryGetProperty("level", out var lvl) ? lvl.GetInt32() : 0;
+
+                results.Add(new BNetWowCharacterDetail(id, name, realmSlug, classId, level));
             }
         }
 
-        return ids;
+        return results;
     }
 
     // Helpers

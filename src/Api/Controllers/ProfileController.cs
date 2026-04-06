@@ -131,6 +131,8 @@ public class ProfileController(
 
     /// <summary>
     /// Retorna todos os personagens vinculados ao Player do usuário autenticado.
+    /// Sincroniza automaticamente personagens da conta Battle.net: insere os ausentes (sem guilda)
+    /// e vincula ao Player os que ainda não estiverem associados.
     /// Passe includeRaiderIo=true para incluir o snapshot do Raider.IO de cada personagem.
     /// </summary>
     [HttpGet("characters")]
@@ -145,6 +147,69 @@ public class ProfileController(
         var userId = GetUserId();
         if (userId is null) return Unauthorized();
 
+        var player = await _db.Players
+            .FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
+
+        if (player is null)
+            return NotFound("No player associated with this account.");
+
+        var bnetLinked = await _db.BattleNetUserTokens.AnyAsync(t => t.UserId == userId.Value, ct);
+        if (!bnetLinked)
+            return BadRequest("Battle.net account not linked. Call GET /api/profile/bnet/authorize first.");
+
+        // ── Sincroniza personagens da conta Battle.net ──────────────────────────
+        IReadOnlyList<BNetWowCharacterDetail> bnetChars;
+        try
+        {
+            bnetChars = await _bnetTokenService.FetchWowCharacterDetailsAsync(userId.Value, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        if (bnetChars.Count > 0)
+        {
+            var bnetIds = bnetChars.Select(c => c.Id).ToList();
+            var existingByGameId = (await _characterRepository.FindByWclActorIdsAsync(bnetIds, ct))
+                .ToDictionary(c => c.WclActorId);
+
+            var allClasses = await _db.Classes.ToListAsync(ct);
+
+            bool anyChange = false;
+            foreach (var bnetChar in bnetChars)
+            {
+                if (existingByGameId.TryGetValue(bnetChar.Id, out var existing))
+                {
+                    // Vincula ao player se ainda não estiver associado
+                    if (existing.PlayerId is null)
+                    {
+                        existing.PlayerId = player.Id;
+                        anyChange = true;
+                    }
+                }
+                else
+                {
+                    // Insere personagem sem guilda
+                    var cls = allClasses.FirstOrDefault(c => c.Id == bnetChar.ClassId);
+                    _db.Characters.Add(new Domain.Entities.Character
+                    {
+                        WclActorId = bnetChar.Id,
+                        Name       = bnetChar.Name,
+                        Server     = bnetChar.RealmSlug,
+                        Region     = "us",
+                        ClassId    = cls?.Id,
+                        PlayerId   = player.Id
+                    });
+                    anyChange = true;
+                }
+            }
+
+            if (anyChange)
+                await _db.SaveChangesAsync(ct);
+        }
+
+        // ── Carrega personagens do player ───────────────────────────────────────
         IQueryable<Domain.Entities.Player> query = _db.Players
             .Include(p => p.Characters)
                 .ThenInclude(c => c.Class)
@@ -158,17 +223,10 @@ public class ProfileController(
                         .ThenInclude(s => s.MythicRuns)
                             .ThenInclude(r => r.Affixes);
 
-        var player = await query
-            .FirstOrDefaultAsync(p => p.AppUserId == userId.Value, ct);
+        var playerWithChars = await query
+            .FirstOrDefaultAsync(p => p.Id == player.Id, ct);
 
-        if (player is null)
-            return NotFound("No player associated with this account.");
-
-        var bnetLinked = await _db.BattleNetUserTokens.AnyAsync(t => t.UserId == userId.Value, ct);
-        if (!bnetLinked)
-            return BadRequest("Battle.net account not linked. Call GET /api/profile/bnet/authorize first.");
-
-        var characters = player.Characters.Select(c => new CharacterDto(
+        var characters = (playerWithChars?.Characters ?? []).Select(c => new CharacterDto(
             c.Id,
             c.Name,
             c.Server,
