@@ -147,6 +147,9 @@ builder.Services.AddHttpClient<IBNetTokenService, BattleNetTokenService>()
 builder.Services.AddHttpClient<IWclGraphQLClient, WclGraphQLClient>()
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
+builder.Services.AddHttpClient<IBlizzardGuildClient, BlizzardGuildClient>()
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
 // Application Services
 builder.Services.AddScoped<IImportReportService, ImportReportService>();
 builder.Services.AddScoped<IGuildSyncService, GuildSyncService>();
