@@ -15,8 +15,30 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((ctx, _, cfg) => cfg
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.Logger(lc => lc
+        .Filter.ByIncludingOnly(e =>
+        {
+            // Always include errors with full detail
+            if (e.Level >= LogEventLevel.Error) return true;
+            // Include Information+ only from the sync worker (start/success/periodic)
+            if (!e.Properties.TryGetValue("SourceContext", out var sc)) return false;
+            return sc.ToString().Contains("RaiderIoSyncWorker")
+                && e.Level >= LogEventLevel.Information;
+        })
+        .WriteTo.File(
+            path: "logs/raiderio-sync-.log",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")));
 
 // Configuration
 builder.Services.Configure<WclAuthOptions>(

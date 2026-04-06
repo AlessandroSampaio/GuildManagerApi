@@ -77,6 +77,7 @@ public sealed partial class RaiderIoSyncWorker(
             await audit.LogAsync("Core.RaiderIoSyncStarted", "Core", entityId, job.UserId, ct: default);
             await syncService.SyncCoreAsync(job.CoreId, job.UserId, progress, ct);
             await audit.LogAsync("Core.RaiderIoSyncCompleted", "Core", entityId, job.UserId, ct: default);
+            LogJobCompleted(job.CoreId, job.UserId?.ToString() ?? "periodic");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -110,6 +111,10 @@ public sealed partial class RaiderIoSyncWorker(
     [LoggerMessage(LogLevel.Information,
         Message = "RaiderIoSyncWorker periodic tick — enqueueing all cores")]
     private partial void LogPeriodicTick();
+
+    [LoggerMessage(LogLevel.Information,
+        Message = "Raider.IO sync completed: coreId={CoreId}, userId={UserId}")]
+    private partial void LogJobCompleted(int CoreId, string UserId);
 
     // ── IProgress adapter ──────────────────────────────────────────────────────
     private sealed class HubProgress(RaiderIoSyncHub hub, CancellationToken ct)
