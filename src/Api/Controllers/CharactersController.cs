@@ -92,6 +92,14 @@ public class CharactersController(
         var snap = MapSnapshot(snapshot);
         return Ok(new RaiderIoProfileResponseDto(
             isFresh,
+            character.Id,
+            character.Name ?? string.Empty,
+            character.Server ?? string.Empty,
+            character.Region ?? string.Empty,
+            character.Class?.Name,
+            character.Guild?.Name,
+            character.PlayerId,
+            character.Player?.Name,
             snap.ThumbnailUrl,
             snap.LastCrawledAt,
             snap.CachedAt,

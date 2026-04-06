@@ -51,6 +51,14 @@ public record RaiderIoSnapshotDto(
 
 public record RaiderIoProfileResponseDto(
     bool IsFresh,
+    int CharacterId,
+    string Name,
+    string Server,
+    string Region,
+    string? ClassName,
+    string? GuildName,
+    int? PlayerId,
+    string? PlayerName,
     string ThumbnailUrl,
     DateTimeOffset LastCrawledAt,
     DateTimeOffset CachedAt,

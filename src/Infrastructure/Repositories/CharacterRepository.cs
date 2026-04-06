@@ -32,7 +32,11 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
         => await _context.Classes.ToListAsync(ct);
 
     public Task<Character?> GetByIdAsync(int id, CancellationToken ct = default)
-        => _context.Characters.FirstOrDefaultAsync(c => c.Id == id, ct);
+        => _context.Characters
+            .Include(c => c.Class)
+            .Include(c => c.Guild)
+            .Include(c => c.Player)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
 
 
 
