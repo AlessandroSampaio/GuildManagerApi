@@ -20,6 +20,10 @@ using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var logDirectory = OperatingSystem.IsLinux()
+    ? "/var/log/GuildManagerApi"
+    : Path.Combine(AppContext.BaseDirectory, "logs");
+
 builder.Host.UseSerilog((ctx, _, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
     .Enrich.FromLogContext()
@@ -35,7 +39,7 @@ builder.Host.UseSerilog((ctx, _, cfg) => cfg
                 && e.Level >= LogEventLevel.Information;
         })
         .WriteTo.File(
-            path: "logs/raiderio-sync-.log",
+            path: Path.Combine(logDirectory, "raiderio-sync-.log"),
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 30,
             outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")));
