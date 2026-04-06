@@ -246,7 +246,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(c => c.GuildId).HasColumnName("guild_id");
                 e.Property(c => c.PlayerId).HasColumnName("player_id");
                 e.HasIndex(c => c.ClassId);
-                e.HasIndex(c => new { c.WclActorId, c.Server }).IsUnique();
+                e.HasIndex(c => c.WclActorId).IsUnique();
                 e.HasIndex(c => c.GuildId);
 
                 e.HasOne(c => c.Class)

@@ -170,43 +170,21 @@ public class ProfileController(
 
         if (bnetChars.Count > 0)
         {
-            var bnetIds = bnetChars.Select(c => c.Id).ToList();
-            var existingByGameId = (await _characterRepository.FindByWclActorIdsAsync(bnetIds, ct))
-                .ToDictionary(c => c.WclActorId);
-
             var allClasses = await _db.Classes.ToListAsync(ct);
 
-            bool anyChange = false;
             foreach (var bnetChar in bnetChars)
             {
-                if (existingByGameId.TryGetValue(bnetChar.Id, out var existing))
+                var cls = allClasses.FirstOrDefault(c => c.Id == bnetChar.ClassId);
+                await _characterRepository.UpsertAsync(new Domain.Entities.Character
                 {
-                    // Vincula ao player se ainda não estiver associado
-                    if (existing.PlayerId is null)
-                    {
-                        existing.PlayerId = player.Id;
-                        anyChange = true;
-                    }
-                }
-                else
-                {
-                    // Insere personagem sem guilda
-                    var cls = allClasses.FirstOrDefault(c => c.Id == bnetChar.ClassId);
-                    _db.Characters.Add(new Domain.Entities.Character
-                    {
-                        WclActorId = bnetChar.Id,
-                        Name       = bnetChar.Name,
-                        Server     = bnetChar.RealmSlug,
-                        Region     = "us",
-                        ClassId    = cls?.Id,
-                        PlayerId   = player.Id
-                    });
-                    anyChange = true;
-                }
+                    WclActorId = bnetChar.Id,
+                    Name       = bnetChar.Name,
+                    Server     = bnetChar.RealmSlug,
+                    Region     = "us",
+                    ClassId    = cls?.Id,
+                    PlayerId   = player.Id
+                }, ct);
             }
-
-            if (anyChange)
-                await _db.SaveChangesAsync(ct);
         }
 
         // ── Carrega personagens do player ───────────────────────────────────────

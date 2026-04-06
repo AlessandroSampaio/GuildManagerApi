@@ -38,7 +38,9 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
 
     public async Task<int> UpsertAsync(Character character, CancellationToken ct = default)
     {
-        var existing = await FindByWclActorAsync(character.WclActorId, character.Server, ct);
+        var existing = await _context.Characters
+            .FirstOrDefaultAsync(c => c.WclActorId == character.WclActorId, ct);
+
         if (existing is null)
         {
             _context.Characters.Add(character);
@@ -46,10 +48,14 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
             return character.Id;
         }
 
-        existing.Name = character.Name;
-        existing.Class = character.Class;
+        existing.Name   = character.Name;
+        existing.Server = character.Server;
+        existing.Region = character.Region;
+        existing.Class  = character.Class;
         if (character.GuildId.HasValue)
             existing.GuildId = character.GuildId;
+        if (character.PlayerId.HasValue)
+            existing.PlayerId = character.PlayerId;
 
         await _context.SaveChangesAsync(ct);
         return existing.Id;
