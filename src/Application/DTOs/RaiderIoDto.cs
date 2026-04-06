@@ -37,3 +37,8 @@ public record RaiderIoSnapshotDto(
     double Score,
     List<RaiderIoMythicRunDto> MythicRuns
 );
+
+public record RaiderIoProfileResponseDto(
+    bool IsFresh,
+    RaiderIoSnapshotDto Snapshot
+);

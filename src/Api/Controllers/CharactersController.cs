@@ -13,11 +13,13 @@ namespace GuildManagerApi.Api.Controllers;
 public class CharactersController(
     ICharacterRepository characters,
     IPerformanceRepository performance,
-    IRaiderIoService raiderIoService) : ControllerBase
+    IRaiderIoService raiderIoService,
+    IRaiderIoProfileRepository raiderIoProfileRepository) : ControllerBase
 {
     private readonly ICharacterRepository _characters = characters;
     private readonly IPerformanceRepository _performance = performance;
     private readonly IRaiderIoService _raiderIoService = raiderIoService;
+    private readonly IRaiderIoProfileRepository _raiderIoProfileRepository = raiderIoProfileRepository;
 
 
     /// <summary>
@@ -55,26 +57,60 @@ public class CharactersController(
     /// <summary>
     /// Busca o perfil Raider.IO do personagem (mythic_plus_best_runs:all, raid_progression)
     /// e atualiza o snapshot local vinculado ao personagem.
+    /// Retorna IsFresh=true quando os dados vêm diretamente do Raider.IO,
+    /// ou IsFresh=false quando são dados em cache (falha na comunicação com o Raider.IO).
     /// </summary>
     [HttpGet("{id:int}/raider-io/profile")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RaiderIoProfileResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> GetRaiderIoProfile([FromRoute] int id, CancellationToken ct)
     {
         var character = await _characters.GetByIdAsync(id, ct);
         if (character is null) return NotFound();
 
         var region = NormalizeRegion(character.Region);
-        var (statusCode, body) = await _raiderIoService.GetCharacterProfileAsync(
-            region, character.Server ?? "", character.Name ?? "", id, ct);
 
-        return new ContentResult
+        bool isFresh = false;
+        try
         {
-            Content = body,
-            ContentType = "application/json",
-            StatusCode = statusCode,
-        };
+            var (statusCode, _) = await _raiderIoService.GetCharacterProfileAsync(
+                region, character.Server ?? "", character.Name ?? "", id, ct);
+            isFresh = statusCode is >= 200 and < 300;
+        }
+        catch
+        {
+            // isFresh permanece false — fallback para o snapshot em cache
+        }
+
+        var snapshot = await _raiderIoProfileRepository.GetSnapshotByCharacterIdAsync(id, ct);
+
+        if (snapshot is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Raider.IO está indisponível e não há dados em cache para este personagem.");
+
+        return Ok(new RaiderIoProfileResponseDto(isFresh, MapSnapshot(snapshot)));
     }
+
+    private static RaiderIoSnapshotDto MapSnapshot(
+        GuildManagerApi.Domain.Entities.RaiderIoCharacterSnapshot s) =>
+        new(
+            s.ThumbnailUrl,
+            s.LastCrawledAt,
+            s.CachedAt,
+            Math.Round(s.MythicRuns.Sum(r => r.Score), 2, MidpointRounding.AwayFromZero),
+            [..s.MythicRuns.Select(r => new RaiderIoMythicRunDto(
+                r.KeystoneRunId,
+                r.Dungeon,
+                r.ShortName,
+                r.MythicLevel,
+                r.CompletedAt,
+                r.Score,
+                r.IconUrl,
+                r.BackgroundImageUrl,
+                [..r.Affixes.Select(a => new RaiderIoAffixDto(a.AffixId, a.Name, a.IconUrl))]
+            ))]
+        );
 
     /// <summary>
     /// Busca characters por nome (substring) e/ou classe, paginado.

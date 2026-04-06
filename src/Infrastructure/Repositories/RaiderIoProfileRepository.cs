@@ -9,6 +9,12 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
 {
     private readonly AppDbContext _context = context;
 
+    public Task<RaiderIoCharacterSnapshot?> GetSnapshotByCharacterIdAsync(int characterId, CancellationToken ct = default)
+        => _context.RaiderIoCharacterSnapshots
+            .Include(s => s.MythicRuns)
+                .ThenInclude(r => r.Affixes)
+            .FirstOrDefaultAsync(s => s.CharacterId == characterId, ct);
+
     public async Task UpsertSnapshotAsync(RaiderIoCharacterSnapshot snapshot, CancellationToken ct = default)
     {
         var nameLower = snapshot.Name.ToLower();
