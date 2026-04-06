@@ -51,7 +51,10 @@ public class CharacterRepository(AppDbContext context) : ICharacterRepository
         existing.Name   = character.Name;
         existing.Server = character.Server;
         existing.Region = character.Region;
-        existing.Class  = character.Class;
+        if (character.Class is not null)
+            existing.Class = character.Class;
+        else if (character.ClassId is not null)
+            existing.ClassId = character.ClassId;
         if (character.GuildId.HasValue)
             existing.GuildId = character.GuildId;
         if (character.PlayerId.HasValue)

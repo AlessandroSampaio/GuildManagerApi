@@ -174,14 +174,15 @@ public class ProfileController(
 
             foreach (var bnetChar in bnetChars)
             {
-                var cls = allClasses.FirstOrDefault(c => c.Id == bnetChar.ClassId);
+                var cls = allClasses.FirstOrDefault(c =>
+                    c.Name.Equals(bnetChar.ClassName, StringComparison.OrdinalIgnoreCase));
                 await _characterRepository.UpsertAsync(new Domain.Entities.Character
                 {
                     WclActorId = bnetChar.Id,
                     Name       = bnetChar.Name,
                     Server     = bnetChar.RealmSlug,
                     Region     = "us",
-                    ClassId    = cls?.Id,
+                    Class      = cls,
                     PlayerId   = player.Id
                 }, ct);
             }

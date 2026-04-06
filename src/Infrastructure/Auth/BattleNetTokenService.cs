@@ -53,7 +53,7 @@ public interface IBNetTokenService
 }
 
 /// <summary>Detalhes de um personagem WoW retornado pela Blizzard /profile/user/wow.</summary>
-public record BNetWowCharacterDetail(long Id, string Name, string RealmSlug, int ClassId, int Level);
+public record BNetWowCharacterDetail(long Id, string Name, string RealmSlug, string ClassName, int Level);
 
 public partial class BattleNetTokenService(
     HttpClient httpClient,
@@ -243,11 +243,11 @@ public partial class BattleNetTokenService(
                 var realmSlug = ch.TryGetProperty("realm", out var realm)
                     && realm.TryGetProperty("slug", out var slug)
                         ? slug.GetString() ?? string.Empty : string.Empty;
-                var classId   = ch.TryGetProperty("playable_class", out var cls)
-                    && cls.TryGetProperty("id", out var cid) ? cid.GetInt32() : 0;
+                var className = ch.TryGetProperty("playable_class", out var cls)
+                    && cls.TryGetProperty("name", out var cn) ? cn.GetString() ?? string.Empty : string.Empty;
                 var level     = ch.TryGetProperty("level", out var lvl) ? lvl.GetInt32() : 0;
 
-                results.Add(new BNetWowCharacterDetail(id, name, realmSlug, classId, level));
+                results.Add(new BNetWowCharacterDetail(id, name, realmSlug, className, level));
             }
         }
 
