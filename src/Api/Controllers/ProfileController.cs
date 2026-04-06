@@ -201,6 +201,10 @@ public class ProfileController(
                     .ThenInclude(c => c.RaiderIoSnapshot!)
                         .ThenInclude(s => s.MythicRuns)
                             .ThenInclude(r => r.Affixes);
+            query = query
+                .Include(p => p.Characters)
+                    .ThenInclude(c => c.RaiderIoSnapshot!)
+                        .ThenInclude(s => s.RaidProgressions);
 
         var playerWithChars = await query
             .FirstOrDefaultAsync(p => p.Id == player.Id, ct);
@@ -235,6 +239,15 @@ public class ProfileController(
                 r.IconUrl,
                 r.BackgroundImageUrl,
                 [..r.Affixes.Select(a => new RaiderIoAffixDto(a.AffixId, a.Name, a.IconUrl))]
+            ))],
+            [..s.RaidProgressions.Select(p => new RaiderIoRaidProgressionDto(
+                p.RaidSlug,
+                p.Summary,
+                p.ExpansionId,
+                p.TotalBosses,
+                p.NormalBossesKilled,
+                p.HeroicBossesKilled,
+                p.MythicBossesKilled
             ))]
         );
 

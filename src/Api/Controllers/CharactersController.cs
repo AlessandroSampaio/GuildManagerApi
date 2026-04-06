@@ -89,7 +89,16 @@ public class CharactersController(
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 "Raider.IO está indisponível e não há dados em cache para este personagem.");
 
-        return Ok(new RaiderIoProfileResponseDto(isFresh, MapSnapshot(snapshot)));
+        var snap = MapSnapshot(snapshot);
+        return Ok(new RaiderIoProfileResponseDto(
+            isFresh,
+            snap.ThumbnailUrl,
+            snap.LastCrawledAt,
+            snap.CachedAt,
+            snap.Score,
+            snap.MythicRuns,
+            snap.RaidProgressions
+        ));
     }
 
     private static RaiderIoSnapshotDto MapSnapshot(
@@ -109,6 +118,15 @@ public class CharactersController(
                 r.IconUrl,
                 r.BackgroundImageUrl,
                 [..r.Affixes.Select(a => new RaiderIoAffixDto(a.AffixId, a.Name, a.IconUrl))]
+            ))],
+            [..s.RaidProgressions.Select(p => new RaiderIoRaidProgressionDto(
+                p.RaidSlug,
+                p.Summary,
+                p.ExpansionId,
+                p.TotalBosses,
+                p.NormalBossesKilled,
+                p.HeroicBossesKilled,
+                p.MythicBossesKilled
             ))]
         );
 

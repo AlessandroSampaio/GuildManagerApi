@@ -30,15 +30,31 @@ public record RaiderIoMythicRunDto(
     List<RaiderIoAffixDto> Affixes
 );
 
+public record RaiderIoRaidProgressionDto(
+    string RaidSlug,
+    string Summary,
+    int ExpansionId,
+    int TotalBosses,
+    int NormalBossesKilled,
+    int HeroicBossesKilled,
+    int MythicBossesKilled
+);
+
 public record RaiderIoSnapshotDto(
     string ThumbnailUrl,
     DateTimeOffset LastCrawledAt,
     DateTimeOffset CachedAt,
     double Score,
-    List<RaiderIoMythicRunDto> MythicRuns
+    List<RaiderIoMythicRunDto> MythicRuns,
+    List<RaiderIoRaidProgressionDto> RaidProgressions
 );
 
 public record RaiderIoProfileResponseDto(
     bool IsFresh,
-    RaiderIoSnapshotDto Snapshot
+    string ThumbnailUrl,
+    DateTimeOffset LastCrawledAt,
+    DateTimeOffset CachedAt,
+    double Score,
+    List<RaiderIoMythicRunDto> MythicRuns,
+    List<RaiderIoRaidProgressionDto> RaidProgressions
 );

@@ -13,6 +13,7 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
         => _context.RaiderIoCharacterSnapshots
             .Include(s => s.MythicRuns)
                 .ThenInclude(r => r.Affixes)
+            .Include(s => s.RaidProgressions)
             .FirstOrDefaultAsync(s => s.CharacterId == characterId, ct);
 
     public async Task UpsertSnapshotAsync(RaiderIoCharacterSnapshot snapshot, CancellationToken ct = default)
@@ -23,6 +24,7 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
 
         var existing = await _context.RaiderIoCharacterSnapshots
             .Include(s => s.MythicRuns)
+            .Include(s => s.RaidProgressions)
             .FirstOrDefaultAsync(s =>
                 s.Name == nameLower &&
                 s.Realm == realmLower &&
@@ -41,9 +43,11 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
         }
         else
         {
-            // Full replacement: delete all existing runs (join table entries cascade)
+            // Full replacement: delete all existing runs and progressions (cascade)
             _context.RaiderIoMythicRuns.RemoveRange(existing.MythicRuns);
             existing.MythicRuns.Clear();
+            _context.RaiderIoRaidProgressions.RemoveRange(existing.RaidProgressions);
+            existing.RaidProgressions.Clear();
         }
 
         existing.ThumbnailUrl = snapshot.ThumbnailUrl;
@@ -90,6 +94,21 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
             }
 
             existing.MythicRuns.Add(newRun);
+        }
+
+        foreach (var prog in snapshot.RaidProgressions)
+        {
+            existing.RaidProgressions.Add(new RaiderIoRaidProgression
+            {
+                SnapshotId = existing.Id,
+                RaidSlug = prog.RaidSlug,
+                Summary = prog.Summary,
+                ExpansionId = prog.ExpansionId,
+                TotalBosses = prog.TotalBosses,
+                NormalBossesKilled = prog.NormalBossesKilled,
+                HeroicBossesKilled = prog.HeroicBossesKilled,
+                MythicBossesKilled = prog.MythicBossesKilled,
+            });
         }
 
         await _context.SaveChangesAsync(ct);

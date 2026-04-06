@@ -14,4 +14,5 @@ public class RaiderIoCharacterSnapshot
     public virtual Character? Character { get; set; }
 
     public ICollection<RaiderIoMythicRun> MythicRuns { get; set; } = [];
+    public ICollection<RaiderIoRaidProgression> RaidProgressions { get; set; } = [];
 }

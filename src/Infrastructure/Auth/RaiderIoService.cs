@@ -144,6 +144,31 @@ public partial class RaiderIoService(
             }
         }
 
+        if (root.TryGetProperty("raid_progression", out var raidProg) &&
+            raidProg.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var tier in raidProg.EnumerateObject())
+            {
+                var prog = new RaiderIoRaidProgression
+                {
+                    RaidSlug = tier.Name,
+                    Summary = tier.Value.TryGetProperty("summary", out var sum)
+                        ? sum.GetString() ?? string.Empty : string.Empty,
+                    ExpansionId = tier.Value.TryGetProperty("expansion_id", out var expId)
+                        ? expId.GetInt32() : 0,
+                    TotalBosses = tier.Value.TryGetProperty("total_bosses", out var tb)
+                        ? tb.GetInt32() : 0,
+                    NormalBossesKilled = tier.Value.TryGetProperty("normal_bosses_killed", out var nbk)
+                        ? nbk.GetInt32() : 0,
+                    HeroicBossesKilled = tier.Value.TryGetProperty("heroic_bosses_killed", out var hbk)
+                        ? hbk.GetInt32() : 0,
+                    MythicBossesKilled = tier.Value.TryGetProperty("mythic_bosses_killed", out var mbk)
+                        ? mbk.GetInt32() : 0,
+                };
+                snapshot.RaidProgressions.Add(prog);
+            }
+        }
+
         return snapshot;
     }
 

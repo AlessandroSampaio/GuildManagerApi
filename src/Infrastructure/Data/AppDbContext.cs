@@ -32,6 +32,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RaiderIoCharacterSnapshot> RaiderIoCharacterSnapshots => Set<RaiderIoCharacterSnapshot>();
     public DbSet<RaiderIoMythicRun> RaiderIoMythicRuns => Set<RaiderIoMythicRun>();
     public DbSet<RaiderIoRunAffix> RaiderIoRunAffixes => Set<RaiderIoRunAffix>();
+    public DbSet<RaiderIoRaidProgression> RaiderIoRaidProgressions => Set<RaiderIoRaidProgression>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -641,5 +642,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasMany(r => r.Affixes)
             .WithMany(a => a.MythicRuns)
             .UsingEntity(j => j.ToTable("raiderio_run_affix_links"));
+
+        builder.Entity<RaiderIoRaidProgression>(e =>
+            {
+                e.HasKey(p => p.Id);
+                e.Property(p => p.Id).HasColumnName("id");
+                e.Property(p => p.SnapshotId).HasColumnName("snapshot_id");
+                e.Property(p => p.RaidSlug).HasColumnName("raid_slug").HasMaxLength(128).IsRequired();
+                e.Property(p => p.Summary).HasColumnName("summary").HasMaxLength(32);
+                e.Property(p => p.ExpansionId).HasColumnName("expansion_id");
+                e.Property(p => p.TotalBosses).HasColumnName("total_bosses");
+                e.Property(p => p.NormalBossesKilled).HasColumnName("normal_bosses_killed");
+                e.Property(p => p.HeroicBossesKilled).HasColumnName("heroic_bosses_killed");
+                e.Property(p => p.MythicBossesKilled).HasColumnName("mythic_bosses_killed");
+                e.HasIndex(p => new { p.SnapshotId, p.RaidSlug }).IsUnique();
+
+                e.HasOne(p => p.Snapshot)
+                    .WithMany(s => s.RaidProgressions)
+                    .HasForeignKey(p => p.SnapshotId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.ToTable("raiderio_raid_progressions");
+            });
     }
 }
