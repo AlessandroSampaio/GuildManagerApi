@@ -270,6 +270,36 @@ public class RaidWeeksController(
     }
 
     /// <summary>
+    /// Lista as penalidades de um player específico nessa semana de raid.
+    /// Retorna 404 se a semana não existir, se o player não existir,
+    /// ou se o player não for membro do core associado à semana.
+    /// </summary>
+    [HttpGet("{id:int}/players/{playerId:int}/penalties")]
+    [ProducesResponseType(typeof(IEnumerable<PlayerWeekPenaltyDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPlayerPenalties(
+        [FromRoute] int id,
+        [FromRoute] int playerId,
+        CancellationToken ct)
+    {
+        var week = await _repository.GetByIdAsync(id, ct);
+        if (week is null) return NotFound();
+
+        var player = await _players.GetByIdAsync(playerId, ct);
+        if (player is null) return UnprocessableEntity("Player not found");
+
+        if (week.CoreId is not null)
+        {
+            var isMember = await _cores.IsPlayerInCoreAsync(week.CoreId.Value, playerId, ct);
+            if (!isMember) return NotFound();
+        }
+
+        var allPenalties = await _penalties.GetPenaltiesByWeekAsync(id, ct);
+        var playerPenalties = allPenalties.Where(p => p.PlayerId == playerId);
+        return Ok(playerPenalties.Select(ToPenaltyDto));
+    }
+
+    /// <summary>
     /// Aplica uma penalidade a um player na semana de raid informada.
     /// </summary>
     [HttpPost("{id:int}/penalties")]
