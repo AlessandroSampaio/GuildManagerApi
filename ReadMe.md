@@ -516,6 +516,8 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | `GET` | `/api/profile/bnet/callback` | ❌ | Callback do Battle.net — valida state, troca code por token e busca BattleTag |
 | `GET` | `/api/profile/bnet/status` | ✅ JWT | Verifica se o usuário possui token BNet ativo e retorna BattleTag |
 | `DELETE` | `/api/profile/bnet/revoke` | ✅ JWT | Revoga e remove o token Battle.net do usuário |
+| `GET` | `/api/profile/characters` | ✅ JWT | Lista os personagens do Player vinculado ao usuário. Sincroniza automaticamente a conta Battle.net: insere personagens ausentes e os associa ao Player. Aceita `?includeRaiderIo=true` para incluir o snapshot Raider.IO de cada personagem |
+| `POST` | `/api/profile/bnet/link-characters` | ✅ JWT | Busca os personagens WoW da conta Battle.net e vincula ao Player os que correspondem a Characters existentes (via `WclActorId`) ainda não associados |
 
 ### Admin
 
@@ -578,8 +580,17 @@ Todos os endpoints abaixo (exceto auth e callback) exigem `Authorization: Bearer
 | Método | Rota | Auth | Descrição |
 |--------|------|------|-----------|
 | `GET` | `/api/characters/{id}` | ✅ | Retorna detalhes de um personagem com histórico de performance |
-| `GET` | `/api/characters/{id}/raider-io/profile` | ✅ | Redireciona (302) para o perfil Raider.IO do personagem usando os dados locais |
+| `GET` | `/api/characters/{id}/raider-io/profile` | ✅ | Busca o perfil Raider.IO do personagem, atualiza o snapshot local e retorna os dados com flag `isFresh` |
 | `GET` | `/api/characters/search` | ✅ | Busca characters por nome (substring) e/ou classe, paginado. Retorna o player vinculado se houver |
+
+#### `GET /api/characters/{id}/raider-io/profile`
+
+Busca `mythic_plus_best_runs:all` e `raid_progression` do Raider.IO, persiste o snapshot e retorna a resposta com:
+
+- `isFresh: true` — dados obtidos diretamente do Raider.IO nesta requisição
+- `isFresh: false` — Raider.IO indisponível; dados servidos do cache local (snapshot anterior)
+
+Retorna `503 Service Unavailable` se o Raider.IO falhar **e** não houver snapshot em cache.
 
 #### Parâmetros de `/api/characters/search`
 
@@ -658,6 +669,8 @@ Um **Core** é um grupo fixo de players associado a uma guilda. Quando vinculado
 | `DELETE` | `/api/cores/{id}` | ✅ | Remove um core |
 | `POST` | `/api/cores/{id}/players/{playerId}` | ✅ | Adiciona um player ao core |
 | `DELETE` | `/api/cores/{id}/players/{playerId}` | ✅ | Remove um player do core |
+| `POST` | `/api/cores/{id}/raider-io/sync` | ✅ | Enfileira a sincronização Raider.IO para todos os personagens do core — retorna `202 Accepted` imediatamente |
+| `GET` | `/api/cores/{id}/raider-io/sync/ws` | ✅ (query param) | WebSocket — recebe eventos de progresso da sincronização Raider.IO em tempo real |
 
 ### Raider.IO
 
@@ -754,6 +767,39 @@ Um **Core** é um grupo fixo de players associado a uma guilda. Quando vinculado
   "entriesWithoutRankPercent": 3
 }
 ```
+
+### Atividades em Background
+
+#### RaiderIoSyncWorker — Sincronização periódica Raider.IO
+
+O `RaiderIoSyncWorker` é um `BackgroundService` que mantém os snapshots Raider.IO atualizados automaticamente.
+
+**Modos de operação:**
+
+| Modo | Gatilho | Descrição |
+|------|---------|-----------|
+| **Periódico** | A cada N horas (configurável) | Enfileira todos os cores existentes para sincronização |
+| **Sob demanda** | `POST /api/cores/{id}/raider-io/sync` | Enfileira um core específico imediatamente |
+
+O intervalo padrão é **6 horas**, configurável via `appsettings.json`:
+
+```json
+"RaiderIoSync": {
+  "SyncIntervalHours": 6,
+  "ThrottleDelayMs": 300
+}
+```
+
+Para cada core sincronizado, o worker chama o Raider.IO para cada personagem do core e persiste o snapshot (`RaiderIoCharacterSnapshot`). O progresso é emitido via WebSocket (`GET /api/cores/{id}/raider-io/sync/ws`) com as fases:
+
+| `phaseCode` | `phase` | Significado |
+|-------------|---------|-------------|
+| `0` | `Started` | Sync iniciado |
+| `1` | `Syncing` | Processando personagens |
+| `2` | `Completed` | Sync concluído com sucesso |
+| `3` | `Failed` | Erro — mensagem em `message` |
+
+O resultado de cada sync é registrado no audit log com ações `Core.RaiderIoSyncStarted`, `Core.RaiderIoSyncCompleted` ou `Core.RaiderIoSyncFailed`.
 
 ---
 
