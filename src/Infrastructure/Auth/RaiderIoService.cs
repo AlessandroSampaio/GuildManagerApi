@@ -105,8 +105,6 @@ public partial class RaiderIoService(
             {
                 var mythicRun = new RaiderIoMythicRun
                 {
-                    KeystoneRunId = run.TryGetProperty("keystone_run_id", out var rid)
-                        ? rid.GetInt64() : 0,
                     Dungeon = run.TryGetProperty("dungeon", out var d)
                         ? d.GetString() ?? string.Empty : string.Empty,
                     ShortName = run.TryGetProperty("short_name", out var sn)

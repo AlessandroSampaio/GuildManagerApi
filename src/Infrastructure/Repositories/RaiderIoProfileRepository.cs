@@ -66,7 +66,6 @@ public class RaiderIoProfileRepository(AppDbContext context) : IRaiderIoProfileR
             var newRun = new RaiderIoMythicRun
             {
                 SnapshotId = existing.Id,
-                KeystoneRunId = run.KeystoneRunId,
                 Dungeon = run.Dungeon,
                 ShortName = run.ShortName,
                 MythicLevel = run.MythicLevel,

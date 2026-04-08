@@ -609,7 +609,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasKey(r => r.Id);
                 e.Property(r => r.Id).HasColumnName("id");
                 e.Property(r => r.SnapshotId).HasColumnName("snapshot_id");
-                e.Property(r => r.KeystoneRunId).HasColumnName("keystone_run_id");
                 e.Property(r => r.Dungeon).HasColumnName("dungeon").HasMaxLength(128).IsRequired();
                 e.Property(r => r.ShortName).HasColumnName("short_name").HasMaxLength(16);
                 e.Property(r => r.MythicLevel).HasColumnName("mythic_level");
@@ -617,7 +616,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.Property(r => r.Score).HasColumnName("score");
                 e.Property(r => r.IconUrl).HasColumnName("icon_url").HasMaxLength(512);
                 e.Property(r => r.BackgroundImageUrl).HasColumnName("background_image_url").HasMaxLength(512);
-                e.HasIndex(r => r.KeystoneRunId).IsUnique();
+                e.HasIndex(r => new { r.SnapshotId, r.Dungeon }).IsUnique();
                 e.HasIndex(r => r.SnapshotId);
 
                 e.HasOne(r => r.Snapshot)

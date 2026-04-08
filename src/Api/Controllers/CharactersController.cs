@@ -117,7 +117,6 @@ public class CharactersController(
             s.CachedAt,
             Math.Round(s.MythicRuns.Sum(r => r.Score), 2, MidpointRounding.AwayFromZero),
             [..s.MythicRuns.Select(r => new RaiderIoMythicRunDto(
-                r.KeystoneRunId,
                 r.Dungeon,
                 r.ShortName,
                 r.MythicLevel,

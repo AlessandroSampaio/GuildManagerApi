@@ -19,7 +19,6 @@ public record RaiderIoAffixDto(
 );
 
 public record RaiderIoMythicRunDto(
-    long KeystoneRunId,
     string Dungeon,
     string ShortName,
     int MythicLevel,

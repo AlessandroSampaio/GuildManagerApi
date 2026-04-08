@@ -4,7 +4,6 @@ public class RaiderIoMythicRun
 {
     public int Id { get; set; }
     public int SnapshotId { get; set; }
-    public long KeystoneRunId { get; set; }
     public string Dungeon { get; set; } = string.Empty;
     public string ShortName { get; set; } = string.Empty;
     public int MythicLevel { get; set; }

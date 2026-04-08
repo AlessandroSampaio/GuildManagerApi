@@ -179,11 +179,11 @@ public class ProfileController(
                 await _characterRepository.UpsertAsync(new Domain.Entities.Character
                 {
                     WclActorId = bnetChar.Id,
-                    Name       = bnetChar.Name,
-                    Server     = bnetChar.RealmSlug,
-                    Region     = "us",
-                    Class      = cls,
-                    PlayerId   = player.Id
+                    Name = bnetChar.Name,
+                    Server = bnetChar.RealmSlug,
+                    Region = "us",
+                    Class = cls,
+                    PlayerId = player.Id
                 }, ct);
             }
         }
@@ -201,10 +201,10 @@ public class ProfileController(
                     .ThenInclude(c => c.RaiderIoSnapshot!)
                         .ThenInclude(s => s.MythicRuns)
                             .ThenInclude(r => r.Affixes);
-            query = query
-                .Include(p => p.Characters)
-                    .ThenInclude(c => c.RaiderIoSnapshot!)
-                        .ThenInclude(s => s.RaidProgressions);
+        query = query
+            .Include(p => p.Characters)
+                .ThenInclude(c => c.RaiderIoSnapshot!)
+                    .ThenInclude(s => s.RaidProgressions);
 
         var playerWithChars = await query
             .FirstOrDefaultAsync(p => p.Id == player.Id, ct);
@@ -230,7 +230,6 @@ public class ProfileController(
             s.CachedAt,
             Math.Round(s.MythicRuns.Sum(r => r.Score), 2, MidpointRounding.AwayFromZero),
             [..s.MythicRuns.Select(r => new RaiderIoMythicRunDto(
-                r.KeystoneRunId,
                 r.Dungeon,
                 r.ShortName,
                 r.MythicLevel,
