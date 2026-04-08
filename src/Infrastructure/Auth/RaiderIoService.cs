@@ -174,7 +174,7 @@ public partial class RaiderIoService(
         Message = "RaiderIO profile request: region={Region} realm={Realm} name={Name} authenticated={Authenticated}")]
     public partial void LogRequest(string Region, string Realm, string Name, bool Authenticated);
 
-    [LoggerMessage(LogLevel.Warning,
+    [LoggerMessage(LogLevel.Error,
         Message = "Failed to cache RaiderIO profile to database")]
     public partial void LogCacheError(Exception ex);
 }
