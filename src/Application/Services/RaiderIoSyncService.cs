@@ -9,7 +9,7 @@ public class RaiderIoSyncOptions
 {
     public const string Section = "RaiderIoSync";
     public int SyncIntervalHours { get; set; } = 6;
-    public int ThrottleDelayMs   { get; set; } = 300;
+    public int ThrottleDelayMs { get; set; } = 300;
 }
 
 public interface IRaiderIoSyncService
@@ -60,7 +60,7 @@ public class RaiderIoSyncService(
         {
             try
             {
-                var (statusCode, _) = await _raiderIoService.GetCharacterProfileAsync(
+                var (statusCode, body) = await _raiderIoService.GetCharacterProfileAsync(
                     ch.Region!, ch.Server!, ch.Name!, ch.Id, ct);
 
                 if (statusCode is >= 200 and < 300)
@@ -69,8 +69,8 @@ public class RaiderIoSyncService(
                 {
                     failed++;
                     _logger.LogWarning(
-                        "Raider.IO returned {StatusCode} for {Name}-{Server} ({Region})",
-                        statusCode, ch.Name, ch.Server, ch.Region);
+                        "Raider.IO returned {StatusCode} for {Name}-{Server} ({Region}). {reason}",
+                        statusCode, ch.Name, ch.Server, ch.Region, body);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

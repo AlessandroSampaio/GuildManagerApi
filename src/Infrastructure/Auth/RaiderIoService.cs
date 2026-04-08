@@ -73,7 +73,7 @@ public partial class RaiderIoService(
 
         var url = $"{_opts.BaseUrl.TrimEnd('/')}/api/v1/characters/profile?{qs}";
 
-        LogRequest(region, realm, name, apiKey is not null);
+        LogRequest(region, realm, name, apiKey is not null, url);
 
         var response = await _httpClient.GetAsync(url, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
@@ -187,8 +187,8 @@ public partial class RaiderIoService(
     }
 
     [LoggerMessage(LogLevel.Debug,
-        Message = "RaiderIO profile request: region={Region} realm={Realm} name={Name} authenticated={Authenticated}")]
-    public partial void LogRequest(string Region, string Realm, string Name, bool Authenticated);
+        Message = "RaiderIO profile request: region={Region} realm={Realm} name={Name} authenticated={Authenticated} ({url})")]
+    public partial void LogRequest(string Region, string Realm, string Name, bool Authenticated, string url);
 
     [LoggerMessage(LogLevel.Error,
         Message = "Failed to cache RaiderIO profile to database")]
