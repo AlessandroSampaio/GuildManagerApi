@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GuildManagerApi.Application.DTOs;
+using GuildManagerApi.Application.Auth;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Domain.Enums;
@@ -20,12 +21,14 @@ public class ReportsController(
         ImportProgressHub hub,
         IReportRepository reports,
         IPerformanceRepository performance,
-        IImportQueue queue) : ControllerBase
+        IImportQueue queue,
+        IJwtService jwtService) : ControllerBase
 {
     private readonly IImportQueue _queue = queue;
     private readonly ImportProgressHub _hub = hub;
     private readonly IReportRepository _reports = reports;
     private readonly IPerformanceRepository _performance = performance;
+    private readonly IJwtService _jwtService = jwtService;
     private static readonly JsonSerializerOptions _jsonOpts =
             new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -131,6 +134,12 @@ public class ReportsController(
             HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
             await HttpContext.Response.WriteAsync(
                 "Requisição WebSocket esperada. Use ws:// ou wss://.", ct);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(access_token) || _jwtService.ValidateToken(access_token) is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
 

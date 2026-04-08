@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GuildManagerApi.Application.Auth;
 using GuildManagerApi.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,13 +18,15 @@ public class CoresController(
     IGuildRepository guilds,
     IPlayerRepository players,
     IRaiderIoSyncQueue raiderIoSyncQueue,
-    RaiderIoSyncHub raiderIoSyncHub) : ControllerBase
+    RaiderIoSyncHub raiderIoSyncHub,
+    IJwtService jwtService) : ControllerBase
 {
     private readonly ICoreRepository _cores = cores;
     private readonly IGuildRepository _guilds = guilds;
     private readonly IPlayerRepository _players = players;
     private readonly IRaiderIoSyncQueue _raiderIoSyncQueue = raiderIoSyncQueue;
     private readonly RaiderIoSyncHub _raiderIoSyncHub = raiderIoSyncHub;
+    private readonly IJwtService _jwtService = jwtService;
 
     /// <summary>
     /// Lista todos os cores paginados.
@@ -189,19 +192,29 @@ public class CoresController(
         return Accepted(new
         {
             message = $"Raider.IO sync para o core \"{core.Name}\" enfileirado.",
-            wsUrl   = $"/api/cores/{id}/raider-io/sync/ws"
+            wsUrl = $"/api/cores/{id}/raider-io/sync/ws"
         });
     }
 
     /// <summary>
     /// WebSocket para receber eventos de progresso da sincronização Raider.IO do core.
     /// </summary>
+    [AllowAnonymous]
     [HttpGet("{id:int}/raider-io/sync/ws")]
-    public async Task RaiderIoSyncProgressWebSocket([FromRoute] int id, CancellationToken ct)
+    public async Task RaiderIoSyncProgressWebSocket(
+        [FromRoute] int id,
+        [FromQuery] string? access_token,
+        CancellationToken ct)
     {
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(access_token) || _jwtService.ValidateToken(access_token) is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
 

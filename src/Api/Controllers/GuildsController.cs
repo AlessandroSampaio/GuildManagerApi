@@ -1,3 +1,4 @@
+using GuildManagerApi.Application.Auth;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
@@ -15,12 +16,14 @@ public class GuildsController(
     IGuildRepository guilds,
     ICharacterRepository characters,
     IGuildSyncQueue syncQueue,
-    GuildSyncHub syncHub) : ControllerBase
+    GuildSyncHub syncHub,
+    IJwtService jwtService) : ControllerBase
 {
     private readonly IGuildRepository    _guilds    = guilds;
     private readonly ICharacterRepository _characters = characters;
     private readonly IGuildSyncQueue     _syncQueue  = syncQueue;
     private readonly GuildSyncHub        _syncHub    = syncHub;
+    private readonly IJwtService         _jwtService = jwtService;
 
 
     [HttpGet("{id:int}")]
@@ -142,11 +145,20 @@ public class GuildsController(
     /// Conecte-se antes ou durante a execução; a conexão permanece aberta até o processo concluir.
     /// </summary>
     [HttpGet("{id:int}/sync/ws")]
-    public async Task SyncProgressWebSocket([FromRoute] int id, CancellationToken ct)
+    public async Task SyncProgressWebSocket(
+        [FromRoute] int id,
+        [FromQuery] string? access_token,
+        CancellationToken ct)
     {
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(access_token) || _jwtService.ValidateToken(access_token) is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }
 
