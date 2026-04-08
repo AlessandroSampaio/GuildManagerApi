@@ -37,12 +37,28 @@ public partial class RaiderIoService(
 
     private const string FixedFields = "mythic_plus_best_runs:all,raid_progression";
 
+    private static readonly Dictionary<string, string> _regionMap =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "United States", "us" },
+            { "Europe",        "eu" },
+            { "Korea",         "kr" },
+            { "Taiwan",        "tw" },
+            { "China",         "cn" },
+        };
+
+    private static string NormalizeRegion(string region)
+    {
+        var trimmed = region.Trim();
+        return _regionMap.TryGetValue(trimmed, out var code) ? code : trimmed.ToLower();
+    }
+
     public async Task<(int StatusCode, string Body)> GetCharacterProfileAsync(
         string region, string realm, string name, int characterId, CancellationToken ct = default)
     {
         var query = new Dictionary<string, string>
         {
-            ["region"] = region.Trim().ToLower(),
+            ["region"] = NormalizeRegion(region),
             ["realm"] = realm.Trim(),
             ["name"] = name.Trim(),
             ["fields"] = FixedFields,
