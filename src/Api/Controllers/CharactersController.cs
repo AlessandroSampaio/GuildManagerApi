@@ -74,7 +74,7 @@ public class CharactersController(
         bool isFresh = false;
         try
         {
-            var (statusCode, _) = await _raiderIoService.GetCharacterProfileAsync(
+            var (statusCode, _, _) = await _raiderIoService.GetCharacterProfileAsync(
                 region, character.Server ?? "", character.Name ?? "", id, ct);
             isFresh = statusCode is >= 200 and < 300;
         }

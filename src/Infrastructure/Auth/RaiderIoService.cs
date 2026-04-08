@@ -19,7 +19,7 @@ public interface IRaiderIoService
     /// mythic_plus_best_runs:all,raid_progression.
     /// Injeta o access_key automaticamente se configurado.
     /// </summary>
-    Task<(int StatusCode, string Body)> GetCharacterProfileAsync(
+    Task<(int StatusCode, string Body, string SafeUrl)> GetCharacterProfileAsync(
         string region, string realm, string name, int characterId, CancellationToken ct = default);
 }
 
@@ -53,7 +53,7 @@ public partial class RaiderIoService(
         return _regionMap.TryGetValue(trimmed, out var code) ? code : trimmed.ToLower();
     }
 
-    public async Task<(int StatusCode, string Body)> GetCharacterProfileAsync(
+    public async Task<(int StatusCode, string Body, string SafeUrl)> GetCharacterProfileAsync(
         string region, string realm, string name, int characterId, CancellationToken ct = default)
     {
         var query = new Dictionary<string, string>
@@ -63,6 +63,11 @@ public partial class RaiderIoService(
             ["name"] = name.Trim(),
             ["fields"] = FixedFields,
         };
+
+        // Build safe URL (without access_key) before injecting the key
+        var safeQs = string.Join("&", query.Select(kv =>
+            $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
+        var safeUrl = $"{_opts.BaseUrl.TrimEnd('/')}/api/v1/characters/profile?{safeQs}";
 
         var apiKey = await _credentials.GetApiKeyAsync(ct);
         if (!string.IsNullOrEmpty(apiKey))
@@ -92,7 +97,7 @@ public partial class RaiderIoService(
             }
         }
 
-        return ((int)response.StatusCode, body);
+        return ((int)response.StatusCode, body, safeUrl);
     }
 
     private static RaiderIoCharacterSnapshot ParseSnapshot(string json)

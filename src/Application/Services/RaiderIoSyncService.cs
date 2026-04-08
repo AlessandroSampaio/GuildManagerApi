@@ -60,7 +60,7 @@ public class RaiderIoSyncService(
         {
             try
             {
-                var (statusCode, body) = await _raiderIoService.GetCharacterProfileAsync(
+                var (statusCode, body, safeUrl) = await _raiderIoService.GetCharacterProfileAsync(
                     ch.Region!, ch.Server!, ch.Name!, ch.Id, ct);
 
                 if (statusCode is >= 200 and < 300)
@@ -68,9 +68,9 @@ public class RaiderIoSyncService(
                 else
                 {
                     failed++;
-                    _logger.LogWarning(
-                        "Raider.IO returned {StatusCode} for {Name}-{Server} ({Region}). {reason}",
-                        statusCode, ch.Name, ch.Server, ch.Region, body);
+                    _logger.LogError(
+                        "Raider.IO sync failed for {Name}-{Server} ({Region}): HTTP {StatusCode} url={SafeUrl} response={Response}",
+                        ch.Name, ch.Server, ch.Region, statusCode, safeUrl, body);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -80,8 +80,9 @@ public class RaiderIoSyncService(
             catch (Exception ex)
             {
                 failed++;
-                _logger.LogWarning(ex,
-                    "Failed to fetch Raider.IO profile for {Name}-{Server}", ch.Name, ch.Server);
+                _logger.LogError(ex,
+                    "Raider.IO sync exception for {Name}-{Server} ({Region})",
+                    ch.Name, ch.Server, ch.Region);
             }
             finally
             {

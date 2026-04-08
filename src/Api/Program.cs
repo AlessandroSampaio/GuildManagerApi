@@ -31,12 +31,18 @@ builder.Host.UseSerilog((ctx, _, cfg) => cfg
     .WriteTo.Logger(lc => lc
         .Filter.ByIncludingOnly(e =>
         {
-            // Always include errors with full detail
-            if (e.Level >= LogEventLevel.Error) return true;
-            // Include Information+ only from the sync worker (start/success/periodic)
             if (!e.Properties.TryGetValue("SourceContext", out var sc)) return false;
-            return sc.ToString().Contains("RaiderIoSyncWorker")
-                && e.Level >= LogEventLevel.Information;
+            var source = sc.ToString();
+
+            // Worker lifecycle events (start/complete/periodic) — Information+
+            if (source.Contains("RaiderIoSyncWorker") && e.Level >= LogEventLevel.Information)
+                return true;
+
+            // Individual character sync failures — Error+ with full detail
+            if (source.Contains("RaiderIoSyncService") && e.Level >= LogEventLevel.Error)
+                return true;
+
+            return false;
         })
         .WriteTo.File(
             path: Path.Combine(logDirectory, "raiderio-sync-.log"),
