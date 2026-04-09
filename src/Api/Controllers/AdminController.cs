@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GuildManagerApi.Application.Auth;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Domain.Exceptions;
 using GuildManagerApi.Domain.Interfaces;
@@ -17,13 +18,15 @@ public class AdminController(
     IBattleNetCredentialService bnetCredentialService,
     IRaiderIoCredentialService raiderIoCredentialService,
     IScoringSettingsRepository scoringSettingsRepository,
-    IAuditService audit) : ControllerBase
+    IAuditService audit,
+    IAuthService authService) : ControllerBase
 {
     private readonly IWclCredentialService _credentialsService = credentialService;
     private readonly IBattleNetCredentialService _bnetCredentialsService = bnetCredentialService;
     private readonly IRaiderIoCredentialService _raiderIoCredentialsService = raiderIoCredentialService;
     private readonly IScoringSettingsRepository _scoringSettingsRepository = scoringSettingsRepository;
     private readonly IAuditService _audit = audit;
+    private readonly IAuthService _authService = authService;
 
     [HttpPut("wcl-credentials")]
     [ProducesResponseType(typeof(WclCredentialStatusResponse), StatusCodes.Status200OK)]
@@ -291,6 +294,36 @@ public class AdminController(
         )).ToList();
 
         return Ok(new PagedResult<AuditLogDto>(dtos, page, pageSize, total));
+    }
+
+    /// <summary>
+    /// Redefine a senha de um usuário. Se NewPassword for null, gera uma senha temporária e a retorna.
+    /// Revoga todas as sessões ativas do usuário.
+    /// </summary>
+    [HttpPost("users/reset-password")]
+    [ProducesResponseType(typeof(AdminResetPasswordResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AdminResetPassword(
+        [FromBody] AdminResetPasswordRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _authService.AdminResetPasswordAsync(request, ct);
+
+            await _audit.LogAsync(
+                "User.AdminPasswordReset",
+                "AppUser",
+                entityId: request.UserId.ToString(),
+                actorId: GetActorId(),
+                actorUsername: GetActorUsername(),
+                ct: ct);
+
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
     }
 
     private Guid? GetActorId()
