@@ -153,38 +153,38 @@ public class ProfileController(
         if (player is null)
             return NotFound("No player associated with this account.");
 
+        // ── Sincroniza personagens da conta Battle.net (se vinculada) ──────────
         var bnetLinked = await _db.BattleNetUserTokens.AnyAsync(t => t.UserId == userId.Value, ct);
-        if (!bnetLinked)
-            return BadRequest("Battle.net account not linked. Call GET /api/profile/bnet/authorize first.");
-
-        // ── Sincroniza personagens da conta Battle.net ──────────────────────────
-        IReadOnlyList<BNetWowCharacterDetail> bnetChars;
-        try
+        if (bnetLinked)
         {
-            bnetChars = await _bnetTokenService.FetchWowCharacterDetailsAsync(userId.Value, ct);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-
-        if (bnetChars.Count > 0)
-        {
-            var allClasses = await _db.Classes.ToListAsync(ct);
-
-            foreach (var bnetChar in bnetChars)
+            IReadOnlyList<BNetWowCharacterDetail> bnetChars;
+            try
             {
-                var cls = allClasses.FirstOrDefault(c =>
-                    c.Name.Equals(bnetChar.ClassName, StringComparison.OrdinalIgnoreCase));
-                await _characterRepository.UpsertAsync(new Domain.Entities.Character
+                bnetChars = await _bnetTokenService.FetchWowCharacterDetailsAsync(userId.Value, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+
+            if (bnetChars.Count > 0)
+            {
+                var allClasses = await _db.Classes.ToListAsync(ct);
+
+                foreach (var bnetChar in bnetChars)
                 {
-                    WclActorId = bnetChar.Id,
-                    Name = bnetChar.Name,
-                    Server = bnetChar.RealmSlug,
-                    Region = "us",
-                    Class = cls,
-                    PlayerId = player.Id
-                }, ct);
+                    var cls = allClasses.FirstOrDefault(c =>
+                        c.Name.Equals(bnetChar.ClassName, StringComparison.OrdinalIgnoreCase));
+                    await _characterRepository.UpsertAsync(new Domain.Entities.Character
+                    {
+                        WclActorId = bnetChar.Id,
+                        Name = bnetChar.Name,
+                        Server = bnetChar.RealmSlug,
+                        Region = "us",
+                        Class = cls,
+                        PlayerId = player.Id
+                    }, ct);
+                }
             }
         }
 
