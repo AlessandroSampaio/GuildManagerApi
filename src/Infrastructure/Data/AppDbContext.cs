@@ -663,5 +663,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
                 e.ToTable("raiderio_raid_progressions");
             });
+
     }
 }

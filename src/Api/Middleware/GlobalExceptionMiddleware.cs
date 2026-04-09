@@ -27,6 +27,8 @@ public class GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExcep
         {
             HttpRequestException http => ((int)(http.StatusCode ?? HttpStatusCode.BadGateway),
                 "WarcraftLogs API error"),
+            KeyNotFoundException => (StatusCodes.Status404NotFound,
+                "Resource not found"),
             InvalidOperationException => (StatusCodes.Status422UnprocessableEntity,
                 "Processing error"),
             OperationCanceledException => (StatusCodes.Status408RequestTimeout,

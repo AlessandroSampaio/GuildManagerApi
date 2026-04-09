@@ -42,3 +42,22 @@ public record UserInfoDto(
     DateTime CreatedAt,
     DateTime? LastLoginAt
 );
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+
+public record ResetPasswordRequest(
+    [Required, MinLength(3), MaxLength(32)] string Username,
+    [Required, EmailAddress] string Email,
+    [Required, MinLength(8), MaxLength(64)] string NewPassword
+);
+
+public record AdminResetPasswordRequest(
+    [Required] Guid UserId,
+    [MinLength(8), MaxLength(64)] string? NewPassword
+);
+
+public record AdminResetPasswordResponse(
+    Guid UserId,
+    string Username,
+    string? GeneratedPassword
+);

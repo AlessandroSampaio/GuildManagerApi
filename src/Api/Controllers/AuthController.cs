@@ -162,6 +162,28 @@ public class AuthController(IAuthService auth) : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Redefine a senha confirmando username e e-mail cadastrados.
+    /// Revoga todas as sessões ativas do usuário.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _auth.ResetPasswordAsync(request, ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { error = ex.Message });
+        }
+    }
+
     private Guid? GetUserId()
     {
         var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)

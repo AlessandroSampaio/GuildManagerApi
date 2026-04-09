@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using GuildManagerApi.Application.DTOs;
 using GuildManagerApi.Domain.Entities;
 using GuildManagerApi.Domain.Enums;
@@ -14,9 +15,14 @@ public interface IAuthService
     Task RevokeAsync(string refreshToken, CancellationToken ct = default);
     Task RevokeAllAsync(Guid userId, CancellationToken ct = default);
     Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default);
+    Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct = default);
+    Task<AdminResetPasswordResponse> AdminResetPasswordAsync(AdminResetPasswordRequest request, CancellationToken ct = default);
 }
 
-public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOptions> jwtOpts) : IAuthService
+public class AuthService(
+    IUserRepository users,
+    IJwtService jwt,
+    IOptions<JwtOptions> jwtOpts) : IAuthService
 {
     private readonly IUserRepository _users = users;
     private readonly IJwtService _jwt = jwt;
@@ -130,7 +136,57 @@ public class AuthService(IUserRepository users, IJwtService jwt, IOptions<JwtOpt
         );
     }
 
+    public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct = default)
+    {
+        var user = await _users.GetByUsernameAsync(request.Username.Trim(), ct)
+            ?? throw new InvalidOperationException("Username or email is incorrect.");
+
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("Account is disabled.");
+
+        if (!string.Equals(user.Email, request.Email.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+            throw new InvalidOperationException("Username or email is incorrect.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        await _users.UpdateAsync(user, ct);
+        await _users.RevokeAllUserTokensAsync(user.Id, ct);
+    }
+
+    public async Task<AdminResetPasswordResponse> AdminResetPasswordAsync(
+        AdminResetPasswordRequest request, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(request.UserId, ct)
+            ?? throw new KeyNotFoundException($"User {request.UserId} not found.");
+
+        string? generated = null;
+        string newPassword;
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            generated = GenerateTemporaryPassword();
+            newPassword = generated;
+        }
+        else
+        {
+            newPassword = request.NewPassword;
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await _users.UpdateAsync(user, ct);
+        await _users.RevokeAllUserTokensAsync(user.Id, ct);
+
+        return new AdminResetPasswordResponse(user.Id, user.Username, generated);
+    }
+
     private static UserInfoDto ToDto(AppUser u) => new(
            u.Id, u.Username, u.Email, u.Role.ToString(), u.CreatedAt, u.LastLoginAt);
+
+    private static string GenerateTemporaryPassword()
+    {
+        const string charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$";
+        var bytes = new byte[16];
+        RandomNumberGenerator.Fill(bytes);
+        return new string(bytes.Select(b => charset[b % charset.Length]).ToArray());
+    }
 
 }
