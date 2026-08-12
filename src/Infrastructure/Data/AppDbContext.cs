@@ -29,6 +29,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PenaltyEvent> PenaltyEvents => Set<PenaltyEvent>();
     public DbSet<PlayerWeekPenalty> PlayerWeekPenalties => Set<PlayerWeekPenalty>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<BackupJob> BackupJobs => Set<BackupJob>();
+    public DbSet<RestoreJob> RestoreJobs => Set<RestoreJob>();
     public DbSet<RaiderIoCharacterSnapshot> RaiderIoCharacterSnapshots => Set<RaiderIoCharacterSnapshot>();
     public DbSet<RaiderIoMythicRun> RaiderIoMythicRuns => Set<RaiderIoMythicRun>();
     public DbSet<RaiderIoRunAffix> RaiderIoRunAffixes => Set<RaiderIoRunAffix>();
@@ -534,6 +536,46 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 e.HasIndex(a => a.EntityType);
                 e.HasIndex(a => a.Action);
                 e.ToTable("audit_logs");
+            });
+
+        builder.Entity<BackupJob>(e =>
+            {
+                e.HasKey(b => b.Id);
+                e.Property(b => b.Id).HasColumnName("id");
+                e.Property(b => b.FileName).HasColumnName("file_name").HasMaxLength(256).IsRequired();
+                e.Property(b => b.SizeBytes).HasColumnName("size_bytes");
+                e.Property(b => b.Status).HasColumnName("status").HasConversion<int>().HasDefaultValue(JobStatus.Queued);
+                e.Property(b => b.CreatedAt).HasColumnName("created_at");
+                e.Property(b => b.CreatedByUserId).HasColumnName("created_by_user_id");
+                e.Property(b => b.CompletedAt).HasColumnName("completed_at");
+                e.Property(b => b.ErrorMessage).HasColumnName("error_message").HasMaxLength(1024);
+                e.HasIndex(b => b.CreatedAt);
+                e.HasIndex(b => b.Status);
+                e.ToTable("backup_jobs");
+            });
+
+        builder.Entity<RestoreJob>(e =>
+            {
+                e.HasKey(r => r.Id);
+                e.Property(r => r.Id).HasColumnName("id");
+                e.Property(r => r.SourceBackupId).HasColumnName("source_backup_id");
+                e.Property(r => r.SourceFileName).HasColumnName("source_file_name").HasMaxLength(256).IsRequired();
+                e.Property(r => r.IsUpload).HasColumnName("is_upload");
+                e.Property(r => r.Status).HasColumnName("status").HasConversion<int>().HasDefaultValue(JobStatus.Queued);
+                e.Property(r => r.CreatedAt).HasColumnName("created_at");
+                e.Property(r => r.CreatedByUserId).HasColumnName("created_by_user_id");
+                e.Property(r => r.CompletedAt).HasColumnName("completed_at");
+                e.Property(r => r.ErrorMessage).HasColumnName("error_message").HasMaxLength(1024);
+                e.HasIndex(r => r.CreatedAt);
+                e.HasIndex(r => r.Status);
+
+                e.HasOne(r => r.SourceBackup)
+                    .WithMany()
+                    .HasForeignKey(r => r.SourceBackupId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .IsRequired(false);
+
+                e.ToTable("restore_jobs");
             });
 
         builder.Entity<BattleNetUserToken>(e =>
