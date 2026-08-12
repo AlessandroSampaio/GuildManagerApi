@@ -7,12 +7,14 @@ using GuildManagerApi.Application.GraphQL;
 using GuildManagerApi.Application.Services;
 using GuildManagerApi.Domain.Interfaces;
 using GuildManagerApi.Infrastructure.Auth;
+using GuildManagerApi.Infrastructure.Backup;
 using GuildManagerApi.Infrastructure.Data;
 using GuildManagerApi.Infrastructure.Encryption;
 using GuildManagerApi.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
@@ -66,6 +68,9 @@ builder.Services.Configure<JwtOptions>(
 
 builder.Services.Configure<EncryptionOptions>(
     builder.Configuration.GetSection(EncryptionOptions.Section));
+
+builder.Services.Configure<BackupSettings>(
+    builder.Configuration.GetSection(BackupSettings.Section));
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -173,6 +178,7 @@ builder.Services.AddScoped<IScoringSettingsRepository, ScoringSettingsRepository
 builder.Services.AddScoped<ICoreRepository, CoreRepository>();
 builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 builder.Services.AddScoped<IRaidWeekRepository, RaidWeekRepository>();
+builder.Services.AddScoped<IDatabaseBackupService, PgDumpRestoreService>();
 builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IFieldEncryptionService, AesGcmFieldEncryptionService>();
 builder.Services.AddSingleton<IImportQueue, ImportQueue>();
@@ -186,6 +192,11 @@ builder.Services.AddSingleton<GuildSyncHub>();
 builder.Services.AddSingleton<RaidWeekHub>();
 builder.Services.AddSingleton<IRaiderIoSyncQueue, RaiderIoSyncQueue>();
 builder.Services.AddSingleton<RaiderIoSyncHub>();
+builder.Services.AddSingleton<IBackupQueue, BackupQueue>();
+builder.Services.AddSingleton<BackupHub>();
+builder.Services.AddSingleton<IRestoreQueue, RestoreQueue>();
+builder.Services.AddSingleton<RestoreHub>();
+builder.Services.AddSingleton<IMaintenanceModeService, MaintenanceModeService>();
 
 // Repositories
 builder.Services.AddScoped<IReportRepository, ReportRepository>();
@@ -194,10 +205,14 @@ builder.Services.AddScoped<IGuildRepository, GuildRepository>();
 builder.Services.AddScoped<IPerformanceRepository, PerformanceRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPenaltyRepository, PenaltyRepository>();
+builder.Services.AddScoped<IBackupJobRepository, BackupJobRepository>();
+builder.Services.AddScoped<IRestoreJobRepository, RestoreJobRepository>();
 
 builder.Services.AddHostedService<ImportWorker>();
 builder.Services.AddHostedService<GuildSyncWorker>();
 builder.Services.AddHostedService<RaiderIoSyncWorker>();
+builder.Services.AddHostedService<BackupWorker>();
+builder.Services.AddHostedService<RestoreWorker>();
 
 // API
 // In-memory cache for OAuth state nonces (anti-CSRF)
@@ -274,7 +289,12 @@ using var scope = app.Services.CreateScope();
 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 await db.Database.MigrateAsync();
 
+var backupSettings = app.Services.GetRequiredService<IOptions<BackupSettings>>().Value;
+Directory.CreateDirectory(backupSettings.ResolvedStorageDirectory);
+Directory.CreateDirectory(Path.Combine(backupSettings.ResolvedStorageDirectory, "uploads"));
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<MaintenanceModeMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
