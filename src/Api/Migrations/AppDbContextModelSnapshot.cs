@@ -126,6 +126,55 @@ namespace GuildManagerApi.Api.Migrations
                     b.ToTable("audit_logs", (string)null);
                 });
 
+            modelBuilder.Entity("GuildManagerApi.Domain.Entities.BackupJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("file_name");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("backup_jobs", (string)null);
+                });
+
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.BattleNetCredential", b =>
                 {
                     b.Property<int>("Id")
@@ -1041,6 +1090,61 @@ namespace GuildManagerApi.Api.Migrations
                     b.ToTable("reports", (string)null);
                 });
 
+            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RestoreJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("error_message");
+
+                    b.Property<bool>("IsUpload")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_upload");
+
+                    b.Property<Guid?>("SourceBackupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_backup_id");
+
+                    b.Property<string>("SourceFileName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_file_name");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("SourceBackupId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("restore_jobs", (string)null);
+                });
+
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.ScoringSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -1696,6 +1800,16 @@ namespace GuildManagerApi.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Guild");
+                });
+
+            modelBuilder.Entity("GuildManagerApi.Domain.Entities.RestoreJob", b =>
+                {
+                    b.HasOne("GuildManagerApi.Domain.Entities.BackupJob", "SourceBackup")
+                        .WithMany()
+                        .HasForeignKey("SourceBackupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("SourceBackup");
                 });
 
             modelBuilder.Entity("GuildManagerApi.Domain.Entities.ScoringTier", b =>
