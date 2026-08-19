@@ -413,8 +413,11 @@ public class RaidWeeksController(
             out DateTime normalized,
             out string? error)
     {
-        // Normalizar para 00:00 UTC (ignorar hora e timezone do input)
-        normalized = input.Date.ToUniversalTime();
+        // Normalizar para 00:00 UTC (ignorar hora e timezone do input).
+        // Não usar ToUniversalTime(): para DateTime com Kind=Unspecified (caso comum
+        // ao desserializar datas sem timezone via JSON), ele assume horário local do
+        // servidor e desloca a data ao converter, quebrando a validação de terça-feira.
+        normalized = DateTime.SpecifyKind(input.Date, DateTimeKind.Utc);
 
         if (normalized.DayOfWeek != DayOfWeek.Tuesday)
         {
