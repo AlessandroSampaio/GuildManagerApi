@@ -133,9 +133,14 @@ public partial class ImportReportService(
 
             foreach (var ranking in fightRankings)
             {
-                // Match by name — best effort, WCL doesn't return actorId in rankings
-                var matchedChar = playerActors.FirstOrDefault(a =>
-                    string.Equals(a.Name, ranking.Name, StringComparison.OrdinalIgnoreCase));
+                // Match by name + server — WCL doesn't return actorId in rankings, and
+                // different characters may share a name across servers.
+                var sameName = playerActors
+                    .Where(a => string.Equals(a.Name, ranking.Name, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var matchedChar = sameName.Count <= 1
+                    ? sameName.FirstOrDefault()
+                    : sameName.FirstOrDefault(a => NormalizeServer(a.Server) == NormalizeServer(ranking.ServerName));
 
                 if (matchedChar is null || !characterIdMap.TryGetValue(matchedChar.Id, out var charLocalId))
                     continue;
@@ -174,6 +179,10 @@ public partial class ImportReportService(
 
         return result;
     }
+
+    // Servers may come as display name ("Azralon") or slug ("azralon"); compare alphanumerics only.
+    private static string NormalizeServer(string? server)
+        => new string((server ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
 
     private static void Report(
          IProgress<ImportProgressEvent>? progress,

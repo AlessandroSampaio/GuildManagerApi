@@ -11,7 +11,14 @@ public class PerformanceRepository(AppDbContext context) : IPerformanceRepositor
 
     public async Task BulkUpsertAsync(IEnumerable<PerformanceEntry> entries, CancellationToken ct = default)
     {
-        foreach (var entry in entries)
+        // The same character can appear more than once per fight (e.g. DPS + HPS rankings,
+        // or duplicate actor names). Added entries aren't visible to the DB lookup below until
+        // SaveChanges, so collapse duplicates first, keeping the best RankPercent.
+        var unique = entries
+            .GroupBy(e => (e.FightId, e.CharacterId))
+            .Select(g => g.OrderByDescending(e => e.RankPercent).First());
+
+        foreach (var entry in unique)
         {
             var existing = await _context.PerformanceEntries
                 .FirstOrDefaultAsync(p => p.FightId == entry.FightId && p.CharacterId == entry.CharacterId, ct);
